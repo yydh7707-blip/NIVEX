@@ -1,0 +1,33 @@
+name = "nivex"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Placeholder. Replace with the id printed by `npx wrangler d1 create nivex`.
+# Local `wrangler dev` uses a local SQLite file and does not require this id to be live.
+
+[assets]
+directory = "../NIVEX.Web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nivex"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+APP_VERSION = "0.1.0"
+TURNSTILE_MODE = "production"
+ALLOW_DEV_VERIFICATION = "false"
+TURNSTILE_SITE_KEY = ""
+EXPECTED_HOSTNAME = ""
+WEB_ORIGIN = ""
+DOWNLOAD_URL = ""
+ACCESS_TOKEN_SECONDS = "600"
+REFRESH_TOKEN_SECONDS = "2592000"
+PASSWORD_ITERATIONS = "120000"
+
+[triggers]
+crons = ["17 3 * * *"]

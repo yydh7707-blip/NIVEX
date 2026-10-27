@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix src/NIVEX.Api test",
+    "test:dotnet": "dotnet test NIVEX.sln",
+    "build:web": "npm --prefix src/NIVEX.Web run build",
+    "dev:web": "npm --prefix src/NIVEX.Web run dev",
+    "dev:api": "npm --prefix src/NIVEX.Api run dev"
+  }
+}

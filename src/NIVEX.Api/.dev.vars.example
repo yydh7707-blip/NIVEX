@@ -1,0 +1,14 @@
+# Copy to .dev.vars for local wrangler dev. Never commit .dev.vars.
+# Development verification accepts only the server-side token "dev-verification"
+# and only when the request host is localhost or 127.0.0.1.
+
+TURNSTILE_MODE=development
+ALLOW_DEV_VERIFICATION=true
+TURNSTILE_SECRET=development-only-secret
+AUTH_SIGNING_KEY=development-signing-key-at-least-32-chars
+CODE_PEPPER=development-code-pepper-change
+IP_HASH_PEPPER=development-ip-pepper-change
+ADMIN_SETUP_TOKEN=development-setup-token-change
+EXPECTED_HOSTNAME=localhost
+WEB_ORIGIN=http://127.0.0.1:8787
+DOWNLOAD_URL=
