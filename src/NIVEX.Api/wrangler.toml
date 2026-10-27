@@ -14,16 +14,16 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "nivex"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "f9799c97-0d69-481d-a3a3-342df31a343c"
 migrations_dir = "migrations"
 
 [vars]
 APP_VERSION = "0.1.0"
 TURNSTILE_MODE = "production"
 ALLOW_DEV_VERIFICATION = "false"
-TURNSTILE_SITE_KEY = ""
-EXPECTED_HOSTNAME = ""
-WEB_ORIGIN = ""
+TURNSTILE_SITE_KEY = "0x4AAAAAAFoPrvSH6IcpVO3-"
+EXPECTED_HOSTNAME = "nivex.xyz.ci,nivex-cc1l.onrender.com"
+WEB_ORIGIN = "https://nivex.xyz.ci,https://nivex-cc1l.onrender.com"
 DOWNLOAD_URL = ""
 ACCESS_TOKEN_SECONDS = "600"
 REFRESH_TOKEN_SECONDS = "2592000"

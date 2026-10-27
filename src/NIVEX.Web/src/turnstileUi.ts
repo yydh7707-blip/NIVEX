@@ -1,4 +1,5 @@
 import { copy } from "./i18n.ts";
+import { api } from "./api.ts";
 
 interface PublicConfig {
   turnstileSiteKey: string;
@@ -38,7 +39,7 @@ export async function mountTurnstile(
   const finish = async (token: string) => {
     status.replaceChildren(el("span", "spinner"), document.createTextNode(copy.verifying));
     status.className = "status";
-    const response = await fetch("/api/v1/verification/turnstile", {
+    const response = await fetch(api("/api/v1/verification/turnstile"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token, action }),

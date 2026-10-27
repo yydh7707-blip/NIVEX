@@ -52,7 +52,8 @@ export function createTurnstileVerifier(config: Config, fetchFn: typeof fetch = 
       }
       if (!payload.success) return { ok: false, reason: "rejected" };
       if (payload.action !== action) return { ok: false, reason: "action" };
-      if (payload.hostname?.toLowerCase() !== config.expectedHostname || host !== config.expectedHostname) {
+      const allowedHosts = new Set(config.expectedHostname.split(",").map((item) => item.trim().toLowerCase()).filter((item) => item.length > 0));
+      if (!payload.hostname || !allowedHosts.has(payload.hostname.toLowerCase())) {
         return { ok: false, reason: "hostname" };
       }
       return { ok: true, reason: "verified", hostname: payload.hostname };

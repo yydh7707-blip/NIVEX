@@ -2,6 +2,7 @@ import { copy, type Copy } from "./i18n.ts";
 import { mountDevicePage } from "./devicePage.ts";
 import { enterPage } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
+import { api } from "./api.ts";
 
 interface PublicConfig {
   version: string;
@@ -29,7 +30,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 
 async function loadConfig(): Promise<void> {
   try {
-    const response = await fetch("/api/v1/public/config");
+    const response = await fetch(api("/api/v1/public/config"));
     if (!response.ok) return;
     config = { ...(await response.json() as PublicConfig), offline: false };
   } catch {
@@ -193,7 +194,7 @@ function ownerForm(action: string, path: string, label: string): HTMLElement {
     if (!verificationId) return;
     button.disabled = true;
     const key = crypto.randomUUID().replaceAll("-", "");
-    const response = await fetch(path, {
+    const response = await fetch(api(path), {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": key },
       body: JSON.stringify({ deviceId: device.input.value, recoveryCode: recovery.input.value, verificationId }),
@@ -239,7 +240,7 @@ function renderAdmin(): void {
     const button = el("button", "btn primary", t().login);
     button.type = "button";
     button.addEventListener("click", async () => {
-      const response = await fetch("/api/v1/admin/login", {
+      const response = await fetch(api("/api/v1/admin/login"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: email.input.value, password: password.input.value }),
@@ -282,7 +283,7 @@ function renderAdmin(): void {
   view.append(block);
 
   async function admin(path: string, body?: unknown): Promise<unknown> {
-    const response = await fetch(path, {
+    const response = await fetch(api(path), {
       method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${sessionStorage.getItem("nivex.admin") ?? ""}`, "content-type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,

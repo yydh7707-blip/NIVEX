@@ -75,8 +75,9 @@ export function withHeaders(request: Request, response: Response, config: Config
   if (!html) headers.set("cache-control", "no-store");
   if (html) headers.set("content-security-policy", CONTENT_SECURITY_POLICY);
   const origin = request.headers.get("origin");
-  if (config.webOrigin && origin === config.webOrigin) {
-    headers.set("access-control-allow-origin", config.webOrigin);
+  const allowed = config.webOrigin.split(",").map((item) => item.trim()).filter((item) => item.length > 0);
+  if (origin && allowed.includes(origin)) {
+    headers.set("access-control-allow-origin", origin);
     headers.set("vary", "Origin");
     headers.set("access-control-allow-headers", "content-type, authorization, idempotency-key");
     headers.set("access-control-allow-methods", "GET, POST, OPTIONS");

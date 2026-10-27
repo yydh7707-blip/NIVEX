@@ -2,6 +2,7 @@ import { copy } from "./i18n.ts";
 import { deviceGlyph, nivexMark, successCheck } from "./icons.ts";
 import { transitionPanels, wait } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
+import { api } from "./api.ts";
 
 export interface PublicConfig {
   version: string;
@@ -150,7 +151,7 @@ async function runCreate(
   }
 
   try {
-    const response = await fetch("/api/v1/devices", {
+    const response = await fetch(api("/api/v1/devices"), {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": key },
       body: JSON.stringify({ verificationId }),
