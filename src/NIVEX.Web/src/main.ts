@@ -70,12 +70,12 @@ function draftBanner(): HTMLElement {
 
 function renderHome(): void {
   const hero = el("section", "hero");
+  const copy = el("div", "hero-copy");
   const title = el("h1");
   t().homeTitle.split("\n").forEach((line, index) => {
     if (index > 0) title.append(document.createElement("br"));
     title.append(line);
   });
-  hero.append(el("p", "kicker", t().homeKicker), title, el("p", "lede", t().homeLede));
   const actions = el("div", "actions");
   const create = el("a", "btn primary", t().create);
   create.href = "/device";
@@ -84,10 +84,10 @@ function renderHome(): void {
   download.href = "/download";
   download.dataset.link = "";
   actions.append(create, download);
-  hero.append(actions);
+  copy.append(el("p", "kicker", t().homeKicker), title, el("p", "lede", t().homeLede), actions);
   const strip = el("div", "specimen-strip");
   strip.append(el("p", "meta", t().plateLabel), el("p", "specimen", "NIV-••••-••••-••••-••••"), el("p", "meta", t().plateNote));
-  hero.append(strip);
+  hero.append(copy, strip);
 
   const what = section(t().what);
   const list = el("ol", "cap-list");
@@ -321,7 +321,8 @@ function paint(): void {
   view.classList.remove("page-enter", "page-enter-done");
   (pages[location.pathname] ?? renderHome)();
   enterPage(view);
-  view.focus();
+  window.scrollTo(0, 0);
+  view.focus({ preventScroll: true });
 }
 
 document.addEventListener("click", (event) => {
