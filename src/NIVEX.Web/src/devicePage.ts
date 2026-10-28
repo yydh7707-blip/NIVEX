@@ -106,18 +106,99 @@ function buildCreatePanel(
   glyph.append(deviceGlyph());
   const generate = el("button", "btn primary", copy.generate);
   generate.type = "button";
+  generate.disabled = true;
   const status = el("p", "status");
+  status.setAttribute("aria-live", "polite");
+
+  const field = el("label", "field");
+  const input = el("input");
+  input.type = "text";
+  input.inputMode = "text";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.maxLength = 45;
+  input.placeholder = copy.ipPlaceholder;
+  field.append(el("span", undefined, copy.ipLabel), input);
+  const check = el("button", "btn ghost", copy.ipCheck);
+  check.type = "button";
+
+  let confirmedIp = "";
+  const resetConfirmation = () => {
+    confirmedIp = "";
+    generate.disabled = true;
+  };
+  input.addEventListener("input", resetConfirmation);
+
+  const runCheck = async () => {
+    const typed = input.value.trim();
+    status.classList.remove("error", "is-shake");
+    if (!typed) {
+      status.textContent = copy.ipEmpty;
+      return;
+    }
+    check.disabled = true;
+    status.textContent = copy.ipChecking;
+    try {
+      const response = await fetch(api("/api/v1/ip/check"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ip: typed }),
+      });
+      const body = await response.json() as { remaining?: number; limit?: number; error?: { message: string } };
+      if (!response.ok) {
+        status.textContent = body.error?.message ?? copy.failed;
+        status.classList.add("error", "is-shake");
+        return;
+      }
+      if ((body.remaining ?? 0) <= 0) {
+        status.textContent = copy.ipLimit;
+        status.classList.add("error", "is-shake");
+        return;
+      }
+      confirmedIp = typed;
+      generate.disabled = false;
+      status.textContent = copy.ipRemaining
+        .replace("{remaining}", String(body.remaining))
+        .replace("{limit}", String(body.limit));
+    } catch {
+      status.textContent = copy.apiDown;
+      status.classList.add("error", "is-shake");
+    } finally {
+      check.disabled = false;
+    }
+  };
+  check.addEventListener("click", () => void runCheck());
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void runCheck();
+    }
+  });
+
+  const actions = el("div", "id-row");
+  actions.append(check, generate);
   panel.append(
     glyph,
     el("h1", undefined, copy.deviceCreateTitle),
     el("p", "lede", copy.deviceCreateLead),
-    generate,
+    el("p", "lede", copy.ipHint),
+    field,
+    actions,
     status,
     footerLinks(),
   );
 
   generate.addEventListener("click", () => {
-    void runCreate(stage, verificationId, config, onNavigate, () => mountVerifyStage(stage, config, onNavigate));
+    if (!confirmedIp) return;
+    void runCreate(
+      stage,
+      verificationId,
+      confirmedIp,
+      config,
+      onNavigate,
+      () => mountVerifyStage(stage, config, onNavigate),
+      () => transitionPanels(stage, buildCreatePanel(stage, config, verificationId, onNavigate)),
+    );
   });
   return panel;
 }
@@ -125,9 +206,11 @@ function buildCreatePanel(
 async function runCreate(
   stage: HTMLElement,
   verificationId: string,
+  ip: string,
   config: PublicConfig,
   onNavigate: (path: string) => void,
   onRetryVerify: () => void,
+  onRetryCreate: () => void,
 ): Promise<void> {
   const progress = buildProgressPanel();
   transitionPanels(stage, progress);
@@ -154,14 +237,16 @@ async function runCreate(
     const response = await fetch(api("/api/v1/devices"), {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": key },
-      body: JSON.stringify({ verificationId }),
+      body: JSON.stringify({ verificationId, ip }),
     });
     markSteps(2, 2);
     const body = await response.json() as CreatedDevice & { error?: { code: string; message: string } };
     if (!response.ok) {
       const consumed = body.error?.code === "verification_invalid";
-      if (consumed) sessionStorage.removeItem("nivex.idempotency");
-      const err = buildErrorPanel(body.error?.message ?? copy.failed, consumed ? onRetryVerify : undefined);
+      const ipRejected = body.error?.code === "ip_mismatch" || body.error?.code === "ip_limit" || body.error?.code === "ip_invalid";
+      if (consumed || ipRejected) sessionStorage.removeItem("nivex.idempotency");
+      const retry = consumed ? onRetryVerify : ipRejected && body.error?.code !== "ip_limit" ? onRetryCreate : undefined;
+      const err = buildErrorPanel(body.error?.message ?? copy.failed, retry);
       transitionPanels(stage, err);
       return;
     }

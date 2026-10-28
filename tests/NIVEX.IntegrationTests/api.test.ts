@@ -54,6 +54,83 @@ describe("NIVEX API", () => {
     expect((await readError(conflict)).code).toBe("idempotency_conflict");
   });
 
+  it("limits device creation to three per IP and requires the typed IP to match", async () => {
+    const api = await createHarness();
+    let serial = 0;
+    const issue = async (ip: string, typed: string, key: string) => {
+      const verificationId = crypto.randomUUID();
+      serial += 1;
+      await api.db.run(
+        `INSERT INTO verifications (id, token_hash, action, hostname, expires_at, used_at, created_at)
+         VALUES (?, ?, 'device_create', '127.0.0.1', ?, NULL, ?)`,
+        [verificationId, `test-token-${serial}`, "2026-01-15T01:00:00.000Z", "2026-01-15T00:00:00.000Z"],
+      );
+      return api.request("/api/v1/devices", {
+        method: "POST",
+        ip,
+        headers: { "idempotency-key": key },
+        body: JSON.stringify({ verificationId, ip: typed }),
+      });
+    };
+
+    const wrong = await issue("198.51.100.7", "198.51.100.8", "ip-wrong-key-000001");
+    expect(wrong.status).toBe(403);
+    expect((await readError(wrong)).code).toBe("ip_mismatch");
+    const bad = await issue("198.51.100.7", "not-an-ip", "ip-bad-key-0000001");
+    expect(bad.status).toBe(400);
+    expect(await api.db.all("SELECT id FROM devices")).toHaveLength(0);
+
+    const check = await api.request("/api/v1/ip/check", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
+    expect(await check.json()).toEqual({ matched: true, limit: 3, used: 0, remaining: 3 });
+
+    for (let i = 0; i < 3; i += 1) {
+      const ok = await issue("198.51.100.7", "198.51.100.7", `ip-ok-key-00000${i}`);
+      expect([ok.status, ok.status === 201 ? "" : await ok.text()]).toEqual([201, ""]);
+    }
+    const fourth = await issue("198.51.100.7", "198.51.100.7", "ip-ok-key-000009");
+    expect(fourth.status).toBe(403);
+    expect((await readError(fourth)).code).toBe("ip_limit");
+    expect(await api.db.all("SELECT id FROM devices")).toHaveLength(3);
+
+    const other = await issue("198.51.100.99", "198.51.100.99", "ip-other-key-00001");
+    expect(other.status).toBe(201);
+
+    const after = await api.request("/api/v1/ip/check", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
+    expect(await after.json()).toEqual({ matched: true, limit: 3, used: 3, remaining: 0 });
+  });
+
+  it("counts an IPv6 /64 as one address and ignores formatting differences", async () => {
+    const api = await createHarness();
+    const check = await api.request("/api/v1/ip/check", {
+      method: "POST",
+      ip: "2001:db8:0:0:0:0:0:1",
+      body: JSON.stringify({ ip: "[2001:DB8::1]" }),
+    });
+    expect(check.status).toBe(200);
+    const sameNet = await api.request("/api/v1/ip/check", {
+      method: "POST",
+      ip: "2001:db8::2",
+      body: JSON.stringify({ ip: "2001:db8::2" }),
+    });
+    expect(sameNet.status).toBe(200);
+  });
+
+  it("rejects a missing IP when creating a device", async () => {
+    const api = await createHarness();
+    const verification = await api.request("/api/v1/verification/turnstile", {
+      method: "POST",
+      body: JSON.stringify({ token: "dev-verification", action: "device_create" }),
+    });
+    const { verificationId } = (await verification.json()) as { verificationId: string };
+    const response = await api.request("/api/v1/devices", {
+      method: "POST",
+      headers: { "idempotency-key": "ip-missing-key-00001" },
+      body: JSON.stringify({ verificationId, ip: "" }),
+    });
+    expect(response.status).toBe(400);
+    expect((await readError(response)).code).toBe("ip_invalid");
+  });
+
   it("rejects a missing or reused verification and a second parallel creation", async () => {
     const api = await createHarness();
     const missing = await api.request("/api/v1/devices", {

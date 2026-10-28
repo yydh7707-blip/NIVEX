@@ -18,6 +18,7 @@ import { ApiError } from "./errors.js";
 import { errorBody, idempotencyKey, json, readJsonObject, requestHost, textField, withHeaders } from "./http.js";
 import { generateDeviceId, generateOpaqueToken, generateOwnerCode, hasPlan, isDeviceId, isOwnerCode, normalizeDeviceId, resolvePlan, type EntitlementRecord, type Plan } from "./ids.js";
 import { constraintMessage, withIdempotency } from "./idempotency.js";
+import { DEVICES_PER_IP, parseIp } from "./ip.js";
 import { logError } from "./db.js";
 import { purgeExpired } from "./maintenance.js";
 import { enforceRateLimit } from "./rateLimit.js";
@@ -86,6 +87,7 @@ async function routeApi(request: Request, url: URL, deps: AppDeps): Promise<Resp
   if (method === "GET" && path === "/api/v1/health") return health(deps);
   if (method === "GET" && path === "/api/v1/public/config") return publicConfig(deps);
   if (method === "POST" && path === "/api/v1/verification/turnstile") return verifyTurnstile(request, deps);
+  if (method === "POST" && path === "/api/v1/ip/check") return checkIp(request, deps);
   if (method === "POST" && path === "/api/v1/devices") return createDevice(request, deps);
   if (method === "POST" && path === "/api/v1/devices/recover") return recoverDevice(request, deps);
   if (method === "POST" && path === "/api/v1/devices/delete") return deleteDevice(request, deps);
@@ -173,6 +175,40 @@ async function verifyTurnstile(request: Request, deps: AppDeps): Promise<Respons
   return json({ verificationId: id, expiresAt: expires }, 201);
 }
 
+async function ipQuotaKey(deps: AppDeps, request: Request, body: Record<string, unknown>): Promise<string> {
+  const typed = parseIp(textField(body, "ip"));
+  if (!typed) throw new ApiError(400, "ip_invalid", "IP 주소 형식이 올바르지 않습니다.");
+  const seen = parseIp(request.headers.get("cf-connecting-ip") ?? "");
+  if (!seen || seen.canonical !== typed.canonical) {
+    throw new ApiError(403, "ip_mismatch", "입력한 IP가 현재 접속 IP와 일치하지 않습니다.");
+  }
+  return sha256Hex(`${deps.config.ipHashPepper}|device_ip|${seen.quotaKey}`);
+}
+
+async function ipUsage(deps: AppDeps, ipHash: string): Promise<number> {
+  const row = await deps.db.get<{ used: number }>("SELECT COUNT(*) AS used FROM ip_claims WHERE ip_hash = ?", [ipHash]);
+  return Number(row?.used ?? 0);
+}
+
+async function checkIp(request: Request, deps: AppDeps): Promise<Response> {
+  ensureSecrets(deps.config);
+  await enforceRateLimit(deps.db, deps.config, request, "ip_check", 30, 3600, deps.now());
+  const body = await readJsonObject(request);
+  const ipHash = await ipQuotaKey(deps, request, body);
+  const used = await ipUsage(deps, ipHash);
+  return json({ matched: true, limit: DEVICES_PER_IP, used, remaining: Math.max(0, DEVICES_PER_IP - used) });
+}
+
+function ipClaim(ipHash: string, devicePublicId: string, nowIso: string): Statement {
+  return {
+    sql: `INSERT INTO ip_claims (id, ip_hash, device_public_id, created_at)
+          SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) < ?
+          UNION ALL
+          SELECT NULL, NULL, NULL, NULL WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) >= ?`,
+    params: [crypto.randomUUID(), ipHash, devicePublicId, nowIso, ipHash, DEVICES_PER_IP, ipHash, DEVICES_PER_IP],
+  };
+}
+
 async function createDevice(request: Request, deps: AppDeps): Promise<Response> {
   ensureSecrets(deps.config);
   const now = deps.now();
@@ -181,7 +217,12 @@ async function createDevice(request: Request, deps: AppDeps): Promise<Response> 
   const body = await readJsonObject(request);
   const verificationId = textField(body, "verificationId");
   if (!UUID_PATTERN.test(verificationId)) throw new ApiError(400, "verification_invalid", "보안 확인이 필요합니다.");
-  const requestHash = await sha256Hex(`device_create\n${verificationId}`);
+  const ipHash = await ipQuotaKey(deps, request, body);
+  const requestHash = await sha256Hex(`device_create\n${verificationId}\n${ipHash}`);
+  const existing = await deps.db.get<{ state: string }>("SELECT state FROM idempotency_records WHERE idempotency_key = ?", [key]);
+  if (!existing && (await ipUsage(deps, ipHash)) >= DEVICES_PER_IP) {
+    throw new ApiError(403, "ip_limit", `이 IP에서는 장치 ID를 최대 ${DEVICES_PER_IP}개까지만 만들 수 있습니다.`);
+  }
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const outcome = await withIdempotency(deps.db, now, key, requestHash, async () => {
@@ -213,6 +254,7 @@ async function createDevice(request: Request, deps: AppDeps): Promise<Response> 
               params: [entitlementId, deviceId, createdAt, createdAt],
             },
             authEvent(publicId, "create", "success", createdAt),
+            ipClaim(ipHash, publicId, createdAt),
           ],
         };
       });
@@ -969,6 +1011,9 @@ function bearer(request: Request): string {
 
 function rethrowConstraint(error: unknown): never {
   const message = constraintMessage(error);
+  if (message.includes("ip_claims")) {
+    throw new ApiError(403, "ip_limit", `이 IP에서는 장치 ID를 최대 ${DEVICES_PER_IP}개까지만 만들 수 있습니다.`);
+  }
   if (message.includes("verification_redemptions")) {
     throw new ApiError(400, "verification_invalid", "보안 확인이 만료되었거나 이미 사용되었습니다.");
   }

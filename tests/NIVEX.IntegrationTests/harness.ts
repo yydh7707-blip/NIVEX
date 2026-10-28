@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleRequest, type AppDeps } from "../../src/NIVEX.Api/src/app.ts";
@@ -7,10 +7,12 @@ import type { Db } from "../../src/NIVEX.Api/src/db.ts";
 import { createSqliteDb } from "../../src/NIVEX.Api/src/sqlite.ts";
 import { createTurnstileVerifier } from "../../src/NIVEX.Api/src/turnstile.ts";
 
-const migration = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../../src/NIVEX.Api/migrations/0001_init.sql"),
-  "utf8",
-);
+const migrationDir = join(dirname(fileURLToPath(import.meta.url)), "../../src/NIVEX.Api/migrations");
+const migration = readdirSync(migrationDir)
+  .filter((name) => name.endsWith(".sql"))
+  .sort()
+  .map((name) => readFileSync(join(migrationDir, name), "utf8"))
+  .join("\n");
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -69,8 +71,14 @@ export async function createHarness(overrides: Partial<Config> = {}): Promise<Ha
     request(path, init = {}) {
       const headers = new Headers(init.headers);
       if (!headers.has("content-type") && init.body) headers.set("content-type", "application/json");
-      headers.set("cf-connecting-ip", init.ip ?? "203.0.113.10");
-      return handleRequest(new Request(`http://127.0.0.1:8787${path}`, { ...init, headers }), deps);
+      const ip = init.ip ?? "203.0.113.10";
+      headers.set("cf-connecting-ip", ip);
+      let body = init.body;
+      if (path === "/api/v1/devices" && typeof body === "string") {
+        const parsed = JSON.parse(body) as Record<string, unknown>;
+        if (parsed.ip === undefined) body = JSON.stringify({ ...parsed, ip });
+      }
+      return handleRequest(new Request(`http://127.0.0.1:8787${path}`, { ...init, body, headers }), deps);
     },
   };
 }
