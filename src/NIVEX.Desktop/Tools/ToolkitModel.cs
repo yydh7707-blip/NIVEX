@@ -36,7 +36,7 @@ public sealed class ToolkitModel : ToolVm, IDisposable
             new ProcessRunner(), network);
 
         Engine = new WorkflowEngine(new SystemStepHost(ConfirmStepAsync));
-        Fix = new FixVm(fixService, this, admin);
+        Fix = new FixVm(fixService, this, admin, version);
         Monitor = new MonitorVm(Service, this, dispatcher);
         Network = new NetworkVm(network, this, Path.Combine(root, "insight", "network-last.json"));
         Flow = new FlowVm(new WorkflowStore(workflowDir), this);

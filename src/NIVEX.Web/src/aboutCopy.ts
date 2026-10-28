@@ -92,7 +92,7 @@ export const en: AboutCopy = {
     {
       name: "NIVEX Fix",
       body: "Diagnose PC conditions and provide safe ways to address identified issues.",
-      detail: "Checks the OS, disk space, temporary files, NIVEX files, network adapter, DNS, and internet reachability. The full scan adds the gateway and read-only SFC and DISM health checks, which need administrator rights. Repairs are limited to clearing temporary files and flushing the DNS cache, and each asks for your confirmation first.",
+      detail: "Checks the OS, disk space, temporary files, NIVEX files, network adapter, DNS, and internet reachability. The full scan adds the gateway and read-only SFC and DISM health checks, which need administrator rights. Repairs are limited to clearing temporary files and flushing the DNS cache, and each asks for your confirmation first. After a repair the affected check is run again and the result is shown as resolved, partially improved, not resolved, or cannot verify. A rule-based analysis lists the evidence and how certain each cause is, and a report can be exported as an HTML file you review before sharing. Read-only tools list startup entries (Run registry keys), recent Windows error records and memory dump files (listed, not analysed), and large files in a folder you choose. Startup entries cannot be changed from NIVEX.",
     },
     {
       name: "NIVEX Monitor",
@@ -216,7 +216,7 @@ export const ko: AboutCopy = {
     {
       name: "NIVEX Fix",
       body: "PC 상태를 검사하고 확인된 문제에 대한 안전한 해결 방법을 제공합니다.",
-      detail: "운영체제, 디스크 여유 공간, 임시 파일, NIVEX 파일, 네트워크 어댑터, DNS, 인터넷 연결을 검사합니다. 전체 검사는 게이트웨이와 읽기 전용 SFC·DISM 상태 검사를 추가하며, 이 둘은 관리자 권한이 필요합니다. 복구는 임시 파일 정리와 DNS 캐시 초기화로 한정되며, 각각 실행 전에 사용자 확인을 요청합니다.",
+      detail: "운영체제, 디스크 여유 공간, 임시 파일, NIVEX 파일, 네트워크 어댑터, DNS, 인터넷 연결을 검사합니다. 전체 검사는 게이트웨이와 읽기 전용 SFC·DISM 상태 검사를 추가하며, 이 둘은 관리자 권한이 필요합니다. 복구는 임시 파일 정리와 DNS 캐시 초기화로 한정되며, 각각 실행 전에 사용자 확인을 요청합니다. 복구 후에는 해당 항목을 다시 검사해 해결 확인·부분 개선·해결되지 않음·검증 불가로 표시합니다. 규칙 기반 원인 분석은 근거와 판단의 확실성을 함께 보여주며, 보고서는 HTML 파일로 내보내 공유 전에 직접 확인할 수 있습니다. 읽기 전용 도구로 시작 프로그램(Run 레지스트리 키), 최근 Windows 오류 기록, 메모리 덤프 파일(목록만, 분석 없음), 선택한 폴더의 큰 파일을 조회할 수 있으며 시작 프로그램은 NIVEX에서 변경할 수 없습니다.",
     },
     {
       name: "NIVEX Monitor",

@@ -72,12 +72,23 @@ public sealed class FixVm : ToolVm
     private string _summary = "";
     private string _message = "";
     private string _lastScan = "";
+    private readonly string _version;
+    private readonly CrashLab _crash = new(new ProcessRunner());
+    private List<CheckResult> _last = [];
+    private List<ErrorEvent> _errors = [];
+    private string _compare = "";
+    private string _diagNote = "";
 
-    public FixVm(FixService fix, ToolkitModel host, bool isAdmin)
+    public FixVm(FixService fix, ToolkitModel host, bool isAdmin, string version = "")
     {
         _fix = fix;
         _host = host;
+        _version = version;
         IsAdmin = isAdmin;
+        ExportCommand = new AsyncCommand(_ => ExportAsync());
+        StartupCommand = new AsyncCommand(_ => LoadStartupAsync(), _ => !Busy);
+        ErrorsCommand = new AsyncCommand(_ => LoadErrorsAsync(), _ => !Busy);
+        LargeCommand = new AsyncCommand(_ => FindLargeAsync(), _ => !Busy);
         QuickCommand = new AsyncCommand(_ => ScanAsync(false), _ => !Busy);
         FullCommand = new AsyncCommand(_ => ScanAsync(true), _ => !Busy);
         CancelCommand = new AsyncCommand(_ => { _cts?.Cancel(); return Task.CompletedTask; }, _ => Busy);
@@ -86,6 +97,18 @@ public sealed class FixVm : ToolVm
     }
 
     public bool IsAdmin { get; }
+    public ObservableCollection<FindingRow> Findings { get; } = new();
+    public ObservableCollection<InfoRow> Startup { get; } = new();
+    public ObservableCollection<InfoRow> Errors { get; } = new();
+    public ObservableCollection<InfoRow> Large { get; } = new();
+    public ICommand ExportCommand { get; }
+    public ICommand StartupCommand { get; }
+    public ICommand ErrorsCommand { get; }
+    public ICommand LargeCommand { get; }
+    public bool HasFindings => Findings.Count > 0;
+    public string Compare { get => _compare; private set { Set(ref _compare, value); Notify(nameof(HasCompare)); } }
+    public bool HasCompare => _compare.Length > 0;
+    public string DiagNote { get => _diagNote; private set => Set(ref _diagNote, value); }
     public ObservableCollection<FixRow> Rows { get; } = new();
     public ICommand QuickCommand { get; }
     public ICommand FullCommand { get; }
@@ -101,6 +124,7 @@ public sealed class FixVm : ToolVm
     protected override void OnLanguage()
     {
         foreach (var row in Rows) row.Refresh();
+        RebuildFindings();
         RefreshAll();
     }
 
@@ -134,6 +158,9 @@ public sealed class FixVm : ToolVm
             var unknown = results.Count(r => r.Status == CheckStatus.Unknown);
             var failed = results.Count(r => r.Status == CheckStatus.Failed);
             Summary = ToolText.F("scanSummary", healthy, problems, unknown, failed);
+            _last = results.ToList();
+            Compare = "";
+            RebuildFindings();
             _lastScan = Fmt.Time(DateTimeOffset.Now);
             Notify(nameof(LastScan));
             _host.AddHistory(new HistoryRecord
@@ -169,12 +196,118 @@ public sealed class FixVm : ToolVm
         var token = _cts.Token;
         try
         {
-            if (row.RepairId == "flush-dns") await FlushDnsAsync(row, token);
-            else if (row.RepairId == "clean-temp") await CleanTempAsync(token);
+            var ids = row.RepairId == "flush-dns" ? new[] { row.Id } : new[] { "disk", "temp" };
+            var before = ids.Select(id => _last.FirstOrDefault(r => r.Id == id)).OfType<CheckResult>().ToList();
+            bool? ok = null;
+            long freed = 0;
+            if (row.RepairId == "flush-dns") ok = await FlushDnsAsync(row, token);
+            else if (row.RepairId == "clean-temp") (ok, freed) = await CleanTempAsync(token);
+            if (ok is null) return;
+            await VerifyAsync(before, ok.Value, freed, token);
         }
         finally
         {
             Busy = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+    }
+
+    private async Task VerifyAsync(IReadOnlyList<CheckResult> before, bool repairOk, long freed, CancellationToken token)
+    {
+        var lines = new List<string>();
+        foreach (var old in before)
+        {
+            var after = await _fix.RecheckAsync(old.Id, token);
+            Rows.FirstOrDefault(x => x.Id == old.Id)?.Apply(after);
+            var verdict = BeforeAfter.Compare(old, after, !repairOk);
+            if (old.Id == "disk") verdict = new CheckComparison(verdict.CheckId, verdict.Before, verdict.After, BeforeAfter.WithFreedSpace(verdict.Verdict, freed));
+            var index = _last.FindIndex(r => r.Id == old.Id);
+            if (index >= 0) _last[index] = after;
+            lines.Add($"{ToolText.Get("chk_" + old.Id)}: {ToolText.Get("vd_" + verdict.Verdict.ToString().ToLowerInvariant())} ({old.Message} → {after.Message})");
+        }
+        RebuildFindings();
+        Compare = string.Join("\n", lines);
+        _host.AddHistory(new HistoryRecord
+        {
+            Kind = HistoryKind.Fix,
+            Title = ToolText.Get("compareTitle"),
+            Success = lines.Count > 0 && !lines.Any(l => l.Contains(ToolText.Get("vd_unresolved")) || l.Contains(ToolText.Get("vd_repairfailed"))),
+            Summary = ToolText.Get("compareTitle"),
+            Detail = Compare,
+        });
+    }
+
+    private void RebuildFindings()
+    {
+        Findings.Clear();
+        foreach (var finding in RootCauseAnalyzer.Analyze(_last)) Findings.Add(new FindingRow(finding));
+        Notify(nameof(HasFindings));
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_last.Count == 0) { Message = ToolText.Get("exportNeedScan"); return; }
+        var path = Dialogs.Save("HTML|*.html", $"NIVEX-report-{DateTime.Now:yyyyMMdd-HHmm}.html");
+        if (path is null) return;
+        var errors = _errors.ToList();
+        var labels = new FixReport.Labels(
+            ToolText.Get("reportTitle"), ToolText.Get("reportGenerated"), "", ToolText.Get("analysisTitle"), ToolText.Get("adviceLabel"),
+            ToolText.Get("reportOpen"), ToolText.Get("reportChecks"), ToolText.Get("errorsTitle"), ToolText.Get("reportNote"),
+            r => ToolText.Get("chk_" + r.Id), s => ToolText.Get("st_" + s.ToString().ToLowerInvariant()),
+            f => ToolText.Get("fnd_" + f.CheckId), c => ToolText.Get("cert_" + c.ToString().ToLowerInvariant()),
+            f => ToolText.Get("fnd_" + f.CheckId + "_adv"));
+        var html = FixReport.Html(labels, _last, RootCauseAnalyzer.Analyze(_last), errors, _version, DateTimeOffset.Now);
+        try
+        {
+            await File.WriteAllTextAsync(path, html);
+            Message = ToolText.F("exportDone", Path.GetFileName(path));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Message = ToolText.Get("exportFailed");
+        }
+    }
+
+    private async Task LoadStartupAsync()
+    {
+        var entries = await Task.Run(StartupInspector.Read);
+        Startup.Clear();
+        foreach (var e in entries)
+            Startup.Add(new InfoRow(e.Name, $"{e.Location} · {ToolText.Get(e.PathExists ? "pathOk" : "pathMissing")}", !e.PathExists));
+        DiagNote = ToolText.F("startupCount", entries.Count);
+    }
+
+    private async Task LoadErrorsAsync()
+    {
+        DiagNote = ToolText.Get("loading");
+        _errors = (await _crash.ReadAsync(15, CancellationToken.None)).ToList();
+        var dumps = await Task.Run(CrashLab.ReadDumps);
+        Errors.Clear();
+        foreach (var e in _errors.Take(30)) Errors.Add(new InfoRow($"{e.Provider} · {e.EventId}", $"{e.Log} · {Fmt.Time(e.Time)}", false));
+        foreach (var d in dumps.Take(5)) Errors.Add(new InfoRow(Path.GetFileName(d.Path), $"{Fmt.Bytes(d.Size)} · {Fmt.Time(d.Created)}", false));
+        DiagNote = ToolText.F("errorsCount", _errors.Count, dumps.Count);
+    }
+
+    private async Task FindLargeAsync()
+    {
+        var folder = Dialogs.OpenFolder();
+        if (folder is null) return;
+        DiagNote = ToolText.Get("loading");
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var scan = await Task.Run(() => LargeFileFinder.Find(folder, 25, 100L * 1048576, _cts.Token), _cts.Token);
+            Large.Clear();
+            foreach (var f in scan.Files) Large.Add(new InfoRow(Path.GetFileName(f.Path), $"{Fmt.Bytes(f.Size)} · {f.Path}", false));
+            DiagNote = ToolText.F("largeCount", scan.Files.Count, scan.Inaccessible);
+        }
+        catch (OperationCanceledException)
+        {
+            DiagNote = ToolText.Get("scanCancelled");
+        }
+        finally
+        {
             _cts.Dispose();
             _cts = null;
         }
@@ -198,17 +331,17 @@ public sealed class FixVm : ToolVm
         return result.Status == CheckStatus.Repaired;
     }
 
-    private async Task CleanTempAsync(CancellationToken token)
+    private async Task<(bool?, long)> CleanTempAsync(CancellationToken token)
     {
         var plan = await Task.Run(() => _fix.PlanTempCleanup(token), token);
         if (plan.Files.Count == 0)
         {
             Message = ToolText.Get("cleanNothing");
-            return;
+            return (null, 0);
         }
         var examples = string.Join("\n", plan.Files.Take(6).Select(f => Path.GetFileName(f.Path)));
         var body = ToolText.F("cleanBody", plan.Files.Count, Fmt.Bytes(plan.TotalBytes), examples);
-        if (!await _host.Confirm.AskAsync(ToolText.Get("cleanTitle"), body)) return;
+        if (!await _host.Confirm.AskAsync(ToolText.Get("cleanTitle"), body)) return (null, 0);
         var result = await Task.Run(() => _fix.ExecuteTempCleanup(plan, null, token), token);
         Message = ToolText.F("cleanDone", result.Deleted, Fmt.Bytes(result.BytesFreed), result.Skipped);
         _host.AddHistory(new HistoryRecord
@@ -219,7 +352,26 @@ public sealed class FixVm : ToolVm
             Summary = Message,
             ErrorType = result.Cancelled ? "cancelled" : null,
         });
+        return (!result.Cancelled, result.BytesFreed);
     }
+}
+
+public sealed class InfoRow(string title, string detail, bool warn)
+{
+    public string Title { get; } = title;
+    public string Detail { get; } = detail;
+    public Brush Brush { get; } = warn ? Fmt.Resource("Danger") : Fmt.Resource("Ink");
+}
+
+public sealed class FindingRow(Finding finding)
+{
+    public string Title => ToolText.Get("fnd_" + finding.CheckId);
+    public string Certainty => ToolText.Get("cert_" + finding.Certainty.ToString().ToLowerInvariant());
+    public string Evidence => finding.Evidence;
+    public string Advice => ToolText.Get("fnd_" + finding.CheckId + "_adv");
+    public string Risk => ToolText.Get("risk_" + finding.Risk.ToString().ToLowerInvariant());
+    public string Related => finding.RelatedIds.Length == 0 ? "" : string.Join(", ", finding.RelatedIds.Select(id => ToolText.Get("chk_" + id)));
+    public bool HasRelated => finding.RelatedIds.Length > 0;
 }
 
 public sealed class MonitorVm : ToolVm

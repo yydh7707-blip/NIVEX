@@ -82,35 +82,42 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
             {
                 ct.ThrowIfCancellationRequested();
                 progress?.Report(new CheckResult(id, CheckStatus.Checking, ""));
-                CheckResult result;
-                try
-                {
-                    result = id switch
-                    {
-                        "os" => CheckOs(),
-                        "disk" => CheckDisk(),
-                        "temp" => await Task.Run(() => CheckTemp(ct), ct),
-                        "nivex" => CheckNivex(),
-                        "adapter" => CheckAdapter(),
-                        "gateway" => await CheckGatewayAsync(ct),
-                        "dns" => await CheckDnsAsync(ct),
-                        "internet" => await CheckInternetAsync(ct),
-                        "sfc" => await CheckToolAsync("sfc", "sfc", ["/verifyonly"], Encoding.Unicode, ct),
-                        "dism" => await CheckToolAsync("dism", "dism", ["/Online", "/Cleanup-Image", "/CheckHealth"], Encoding.Default, ct),
-                        _ => new CheckResult(id, CheckStatus.Unknown, "not supported"),
-                    };
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception exception) when (exception is not OutOfMemoryException)
-                {
-                    result = new CheckResult(id, CheckStatus.Failed, exception.GetType().Name);
-                }
+                var result = await CheckOneAsync(id, ct);
                 results.Add(result);
                 progress?.Report(result);
             }
             return results;
         }
         finally { Volatile.Write(ref _scanning, 0); }
+    }
+
+    // Re-runs a single check, used to verify a repair against the real system state.
+    public async Task<CheckResult> RecheckAsync(string id, CancellationToken ct) => await CheckOneAsync(id, ct);
+
+    private async Task<CheckResult> CheckOneAsync(string id, CancellationToken ct)
+    {
+        try
+        {
+            return id switch
+            {
+                "os" => CheckOs(),
+                "disk" => CheckDisk(),
+                "temp" => await Task.Run(() => CheckTemp(ct), ct),
+                "nivex" => CheckNivex(),
+                "adapter" => CheckAdapter(),
+                "gateway" => await CheckGatewayAsync(ct),
+                "dns" => await CheckDnsAsync(ct),
+                "internet" => await CheckInternetAsync(ct),
+                "sfc" => await CheckToolAsync("sfc", "sfc", ["/verifyonly"], Encoding.Unicode, ct),
+                "dism" => await CheckToolAsync("dism", "dism", ["/Online", "/Cleanup-Image", "/CheckHealth"], Encoding.Default, ct),
+                _ => new CheckResult(id, CheckStatus.Unknown, "not supported"),
+            };
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return new CheckResult(id, CheckStatus.Failed, exception.GetType().Name);
+        }
     }
 
     private CheckResult CheckOs() =>

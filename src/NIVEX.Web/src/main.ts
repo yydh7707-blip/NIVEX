@@ -19,7 +19,7 @@ const view = document.querySelector<HTMLElement>("#view")!;
 const nav = document.querySelector<HTMLElement>(".nav")!;
 const footer = document.querySelector<HTMLElement>(".foot")!;
 const INSTALLER_PATH = "/downloads/NIVEX-Setup.exe";
-let config: PublicConfig = { version: "0.1.0", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
+let config: PublicConfig = { version: "0.2.0", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
 
 function t(): Copy {
   return copy;
@@ -149,7 +149,7 @@ function renderGuide(): void {
 
 function renderReleases(): void {
   const block = section(t().releaseTitle);
-  block.append(el("p", "kicker", config.offline ? "0.1.0" : config.version), el("p", undefined, t().releaseBody));
+  block.append(el("p", "kicker", config.offline ? "0.2.0" : config.version), el("p", undefined, t().releaseBody));
   view.append(block);
 }
 

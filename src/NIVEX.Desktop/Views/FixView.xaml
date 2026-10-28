@@ -52,5 +52,82 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <StackPanel Visibility="{Binding HasCompare, Converter={StaticResource BoolVis}}" Margin="0,26,0,0">
+      <TextBlock Text="{Binding Tx[compareTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[compareLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,8"/>
+      <TextBlock Text="{Binding Compare}" Foreground="{StaticResource Silver}" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <StackPanel Visibility="{Binding HasFindings, Converter={StaticResource BoolVis}}" Margin="0,26,0,0">
+      <TextBlock Text="{Binding Tx[analysisTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[analysisLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,6"/>
+      <ItemsControl ItemsSource="{Binding Findings}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,12">
+              <StackPanel>
+                <WrapPanel>
+                  <TextBlock Text="{Binding Title}" FontWeight="Medium" Margin="0,0,12,0"/>
+                  <TextBlock Text="{Binding Certainty}" Foreground="{StaticResource Silver}" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="{Binding Risk}" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+                </WrapPanel>
+                <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0">
+                  <Run Text="{Binding DataContext.Tx[evidenceLabel], RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Evidence, Mode=OneWay}"/>
+                </TextBlock>
+                <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                           Visibility="{Binding HasRelated, Converter={StaticResource BoolVis}}">
+                  <Run Text="{Binding DataContext.Tx[relatedLabel], RelativeSource={RelativeSource AncestorType=UserControl}, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Related, Mode=OneWay}"/>
+                </TextBlock>
+                <TextBlock Text="{Binding Advice}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"/>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+
+    <Button Content="{Binding Tx[exportReport]}" Command="{Binding ExportCommand}" Style="{StaticResource SecondaryButton}"
+            HorizontalAlignment="Left" Margin="0,18,0,0"/>
+
+    <Border Style="{StaticResource Rule}" Margin="0,26,0,16"/>
+    <TextBlock Text="{Binding Tx[advancedTitle]}" FontSize="15" FontWeight="Medium"/>
+    <TextBlock Text="{Binding Tx[advancedLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+    <WrapPanel>
+      <Button Content="{Binding Tx[startupBtn]}" Command="{Binding StartupCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      <Button Content="{Binding Tx[errorsBtn]}" Command="{Binding ErrorsCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      <Button Content="{Binding Tx[largeBtn]}" Command="{Binding LargeCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+    </WrapPanel>
+    <TextBlock Text="{Binding DiagNote}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,6"/>
+    <ItemsControl ItemsSource="{Binding Startup}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Margin="0,4">
+            <TextBlock Text="{Binding Title}" Foreground="{Binding Brush}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <ItemsControl ItemsSource="{Binding Errors}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Margin="0,4">
+            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <ItemsControl ItemsSource="{Binding Large}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Margin="0,4">
+            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
   </StackPanel>
 </UserControl>
