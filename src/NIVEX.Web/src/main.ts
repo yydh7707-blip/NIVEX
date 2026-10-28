@@ -156,7 +156,7 @@ function renderReleases(): void {
 function renderPrivacy(): void {
   const block = section(t().privacyTitle);
   const lines = [
-    "Collected: Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, authentication events, and a hashed IP used only for rate limits and the three-Device-IDs-per-IP limit. The hashed IP record behind that limit is kept after a device is deleted so the limit cannot be reset.",
+    "Collected: Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, authentication events, and a hashed IP used only for rate limits and the three-Device-IDs-per-IP limit. The hashed IP record behind that limit is kept after a device is deleted so the limit cannot be reset. Until a device is activated, its activation code is also kept encrypted so that the IP that created it can look it up again; it is erased on activation.",
     "Not collected: a password, an email for the device user, card numbers, MAC addresses, hardware serial numbers, or the raw IP address.",
     "Purpose: authentication, session continuity, revocation, abuse prevention, and later entitlement checks.",
     "Retention: refresh tokens last until expiry or revocation, authentication events for 180 days, abuse events for 30 days, and idempotency responses for 24 hours. A daily job deletes expired rows.",

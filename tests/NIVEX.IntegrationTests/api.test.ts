@@ -97,6 +97,23 @@ describe("NIVEX API", () => {
 
     const after = await api.request("/api/v1/ip/check", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
     expect(await after.json()).toEqual({ matched: true, limit: 3, used: 3, remaining: 0 });
+
+    const lookup = await api.request("/api/v1/ip/devices", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
+    const listed = (await lookup.json()) as { devices: { deviceId: string; status: string; activationCode: string | null }[] };
+    expect(listed.devices).toHaveLength(3);
+    expect(listed.devices.every((d) => d.status === "unclaimed" && /^[A-Z0-9-]+$/.test(d.activationCode ?? ""))).toBe(true);
+    const ids = (await api.db.all<{ public_id: string }>("SELECT public_id FROM devices")).map((r) => r.public_id);
+    expect(listed.devices.every((d) => ids.includes(d.deviceId))).toBe(true);
+
+    const foreign = await api.request("/api/v1/ip/devices", { method: "POST", ip: "198.51.100.50", body: JSON.stringify({ ip: "198.51.100.50" }) });
+    expect(((await foreign.json()) as { devices: unknown[] }).devices).toHaveLength(0);
+    const mismatch = await api.request("/api/v1/ip/devices", { method: "POST", ip: "198.51.100.50", body: JSON.stringify({ ip: "198.51.100.7" }) });
+    expect(mismatch.status).toBe(403);
+
+    await api.db.run("UPDATE devices SET status = 'active', activation_code_hash = NULL WHERE public_id = ?", [listed.devices[0]!.deviceId]);
+    const again = await api.request("/api/v1/ip/devices", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
+    const second = (await again.json()) as { devices: { status: string; activationCode: string | null }[] };
+    expect(second.devices.find((d) => d.status === "active")?.activationCode).toBeNull();
   });
 
   it("counts an IPv6 /64 as one address and ignores formatting differences", async () => {

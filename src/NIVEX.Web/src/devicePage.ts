@@ -3,6 +3,7 @@ import { deviceGlyph, nivexMark, successCheck } from "./icons.ts";
 import { transitionPanels, wait } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
 import { api } from "./api.ts";
+import { mountIpLookup } from "./ipLookup.ts";
 
 export interface PublicConfig {
   version: string;
@@ -64,12 +65,14 @@ export function mountDevicePage(
     const panel = successPanel(JSON.parse(stored) as CreatedDevice, true, config, onNavigate);
     panel.classList.add("flow-panel", "is-active");
     root.append(panel);
+    mountIpLookup(root);
     return;
   }
 
   const stage = el("div", "flow-stage");
   root.append(stage);
   mountVerifyStage(stage, config, onNavigate);
+  mountIpLookup(root);
 }
 
 function mountVerifyStage(stage: HTMLElement, config: PublicConfig, onNavigate: (path: string) => void): void {

@@ -19,6 +19,7 @@ import { errorBody, idempotencyKey, json, readJsonObject, requestHost, textField
 import { generateDeviceId, generateOpaqueToken, generateOwnerCode, hasPlan, isDeviceId, isOwnerCode, normalizeDeviceId, resolvePlan, type EntitlementRecord, type Plan } from "./ids.js";
 import { constraintMessage, withIdempotency } from "./idempotency.js";
 import { DEVICES_PER_IP, parseIp } from "./ip.js";
+import { openCode, sealCode } from "./vault.js";
 import { logError } from "./db.js";
 import { purgeExpired } from "./maintenance.js";
 import { enforceRateLimit } from "./rateLimit.js";
@@ -88,6 +89,7 @@ async function routeApi(request: Request, url: URL, deps: AppDeps): Promise<Resp
   if (method === "GET" && path === "/api/v1/public/config") return publicConfig(deps);
   if (method === "POST" && path === "/api/v1/verification/turnstile") return verifyTurnstile(request, deps);
   if (method === "POST" && path === "/api/v1/ip/check") return checkIp(request, deps);
+  if (method === "POST" && path === "/api/v1/ip/devices") return ipDevices(request, deps);
   if (method === "POST" && path === "/api/v1/devices") return createDevice(request, deps);
   if (method === "POST" && path === "/api/v1/devices/recover") return recoverDevice(request, deps);
   if (method === "POST" && path === "/api/v1/devices/delete") return deleteDevice(request, deps);
@@ -199,14 +201,49 @@ async function checkIp(request: Request, deps: AppDeps): Promise<Response> {
   return json({ matched: true, limit: DEVICES_PER_IP, used, remaining: Math.max(0, DEVICES_PER_IP - used) });
 }
 
-function ipClaim(ipHash: string, devicePublicId: string, nowIso: string): Statement {
+function ipClaim(ipHash: string, devicePublicId: string, nowIso: string, activationEnc: string): Statement {
   return {
-    sql: `INSERT INTO ip_claims (id, ip_hash, device_public_id, created_at)
-          SELECT ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) < ?
+    sql: `INSERT INTO ip_claims (id, ip_hash, device_public_id, created_at, activation_enc)
+          SELECT ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) < ?
           UNION ALL
-          SELECT NULL, NULL, NULL, NULL WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) >= ?`,
-    params: [crypto.randomUUID(), ipHash, devicePublicId, nowIso, ipHash, DEVICES_PER_IP, ipHash, DEVICES_PER_IP],
+          SELECT NULL, NULL, NULL, NULL, NULL WHERE (SELECT COUNT(*) FROM ip_claims WHERE ip_hash = ?) >= ?`,
+    params: [crypto.randomUUID(), ipHash, devicePublicId, nowIso, activationEnc, ipHash, DEVICES_PER_IP, ipHash, DEVICES_PER_IP],
   };
+}
+
+interface ClaimRow {
+  device_public_id: string;
+  created_at: string;
+  activation_enc: string | null;
+  status: string | null;
+  activation_code_hash: string | null;
+}
+
+async function ipDevices(request: Request, deps: AppDeps): Promise<Response> {
+  ensureSecrets(deps.config);
+  await enforceRateLimit(deps.db, deps.config, request, "ip_devices", 20, 3600, deps.now());
+  const body = await readJsonObject(request);
+  const ipHash = await ipQuotaKey(deps, request, body);
+  const rows = await deps.db.all<ClaimRow>(
+    `SELECT c.device_public_id, c.created_at, c.activation_enc, d.status, d.activation_code_hash
+       FROM ip_claims c LEFT JOIN devices d ON d.public_id = c.device_public_id
+      WHERE c.ip_hash = ? ORDER BY c.created_at`,
+    [ipHash],
+  );
+  const devices = [];
+  for (const row of rows) {
+    if (!row.status) continue;
+    let activationCode: string | null = null;
+    if (row.status === "unclaimed" && row.activation_code_hash) {
+      const opened = await openCode(deps.config.codePepper, row.device_public_id, row.activation_enc);
+      // A recovery may have replaced the code, so only show a code that still matches the server hash.
+      if (opened && (await safeEqual(await hashSecret(deps.config.codePepper, "activation", opened), row.activation_code_hash))) {
+        activationCode = opened;
+      }
+    }
+    devices.push({ deviceId: row.device_public_id, createdAt: row.created_at, status: row.status, activationCode });
+  }
+  return json({ matched: true, limit: DEVICES_PER_IP, used: await ipUsage(deps, ipHash), devices });
 }
 
 async function createDevice(request: Request, deps: AppDeps): Promise<Response> {
@@ -254,7 +291,7 @@ async function createDevice(request: Request, deps: AppDeps): Promise<Response> 
               params: [entitlementId, deviceId, createdAt, createdAt],
             },
             authEvent(publicId, "create", "success", createdAt),
-            ipClaim(ipHash, publicId, createdAt),
+            ipClaim(ipHash, publicId, createdAt, await sealCode(deps.config.codePepper, publicId, activationCode)),
           ],
         };
       });
@@ -405,6 +442,7 @@ async function activate(request: Request, deps: AppDeps): Promise<Response> {
         params: [instant, instant, device.id],
       },
       authEvent(device.public_id, "activate", "success", instant),
+      { sql: "UPDATE ip_claims SET activation_enc = NULL WHERE device_public_id = ?", params: [device.public_id] },
     ]);
   } catch (error) {
     const current = await deps.db.get<CredentialRow>(

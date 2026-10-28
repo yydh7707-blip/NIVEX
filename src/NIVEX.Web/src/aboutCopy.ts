@@ -134,7 +134,7 @@ export const en: AboutCopy = {
   privacyItems: [
     ["Device ID", "A public name for one installation. It is used to find the device record during sign-in."],
     ["Activation code", "Shown once after a Device ID is created. It activates one installation, which then signs in with its own key."],
-    ["Stored on the server", "Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, sign-in events, and hashed IP values used for rate limits and the three-Device-IDs-per-IP limit."],
+    ["Stored on the server", "Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, sign-in events, and hashed IP values used for rate limits and the three-Device-IDs-per-IP limit, plus an encrypted copy of each activation code until the device is activated so the IP that created it can look it up again (erased on activation)."],
     ["Not collected", "A password, card numbers, MAC addresses, hardware serial numbers, or the raw IP address."],
     ["Where it goes", "The NIVEX API runs on Cloudflare Workers with a Cloudflare D1 database."],
     ["Retention", "Refresh tokens until expiry or revocation, sign-in events 180 days, abuse events 30 days, idempotency responses 24 hours. The hashed IP record behind the per-IP limit is currently kept after a device is deleted so that the limit cannot be reset. Final retention terms are pending operator review."],
@@ -258,7 +258,7 @@ export const ko: AboutCopy = {
   privacyItems: [
     ["Device ID", "설치본 하나를 가리키는 공개 이름입니다. 로그인할 때 장치 기록을 찾는 데 쓰입니다."],
     ["활성화 코드", "Device ID를 만든 뒤 한 번만 표시됩니다. 설치본 하나를 활성화하며, 이후 그 설치본은 자체 키로 로그인합니다."],
-    ["서버에 저장되는 정보", "Device ID, 활성화 코드와 복구 코드의 해시, 설치본 공개 키, 무작위 설치 ID, 리프레시 토큰 해시, 로그인 이벤트, 요청 제한과 IP당 Device ID 3개 제한에 쓰는 IP 해시값."],
+    ["서버에 저장되는 정보", "Device ID, 활성화 코드와 복구 코드의 해시, 설치본 공개 키, 무작위 설치 ID, 리프레시 토큰 해시, 로그인 이벤트, 요청 제한과 IP당 Device ID 3개 제한에 쓰는 IP 해시값, 활성화 전까지 같은 IP에서 다시 조회할 수 있도록 암호화해 보관하는 활성화 코드(활성화 시 삭제)."],
     ["수집하지 않는 정보", "비밀번호, 카드 번호, MAC 주소, 하드웨어 일련번호, 원본 IP 주소."],
     ["전달되는 서버", "NIVEX API는 Cloudflare Workers에서 동작하고 Cloudflare D1 데이터베이스를 사용합니다."],
     ["보존 기간", "리프레시 토큰은 만료 또는 폐기 시까지, 로그인 이벤트 180일, 남용 이벤트 30일, 멱등성 응답 24시간입니다. IP당 제한에 쓰는 IP 해시 기록은 제한을 초기화할 수 없도록 장치를 삭제해도 현재는 유지됩니다. 최종 보존 기준은 운영자 검토 후 확정됩니다."],

@@ -233,6 +233,10 @@ textarea { min-height: 7rem; resize: vertical; }
 .status.error { color: var(--danger); }
 .status.is-shake { animation: shake 380ms var(--ease); }
 .status { overflow-wrap: anywhere; }
+.lookup { margin-top: 2.5rem; padding-top: 2rem; border-top: 1px solid var(--line); max-width: 40rem; }
+.lookup-list { list-style: none; margin: 1rem 0 0; padding: 0; }
+.lookup-item { padding: 0.9rem 0; border-top: 1px solid var(--line); }
+.lookup-item .field { margin: 0.4rem 0; }
 .id-row { display: flex; gap: 0.55rem; align-items: stretch; flex-wrap: wrap; }
 .id-row input { flex: 1 1 12rem; font-family: var(--mono); letter-spacing: 0.05em; }
 
