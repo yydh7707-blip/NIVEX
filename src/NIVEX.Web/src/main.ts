@@ -15,7 +15,8 @@ interface PublicConfig {
 const view = document.querySelector<HTMLElement>("#view")!;
 const nav = document.querySelector<HTMLElement>(".nav")!;
 const footer = document.querySelector<HTMLElement>(".foot")!;
-let config: PublicConfig = { version: "0.1.0", turnstileSiteKey: "", devVerification: false, downloadUrl: "", offline: true };
+const INSTALLER_PATH = "/downloads/NIVEX-Setup.exe";
+let config: PublicConfig = { version: "0.1.0", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
 
 function t(): Copy {
   return copy;
@@ -32,7 +33,8 @@ async function loadConfig(): Promise<void> {
   try {
     const response = await fetch(api("/api/v1/public/config"));
     if (!response.ok) return;
-    config = { ...(await response.json() as PublicConfig), offline: false };
+    const loaded = await response.json() as PublicConfig;
+    config = { ...loaded, downloadUrl: loaded.downloadUrl || INSTALLER_PATH, offline: false };
   } catch {
     config = { ...config, offline: true };
   }
