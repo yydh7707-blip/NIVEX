@@ -89,6 +89,9 @@ a { color: inherit; }
 }
 .skip:focus { top: 1rem; }
 
+#view:focus,
+#view:focus-visible { outline: none; }
+
 #view.page-enter:not(.page-enter-done) {
   opacity: 0;
   transform: translateY(10px);
