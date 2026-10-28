@@ -150,11 +150,12 @@ h2 { font-size: 1.35rem; }
   background: transparent;
   transition: transform 140ms var(--ease), background 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
-.btn.primary, .primary {
+.btn.primary, .primary, .btn.primary:hover, .btn.primary:visited, .btn.primary:disabled {
   background: var(--ink);
-  color: #0a0b0c;
+  color: #000 !important;
   border-color: rgba(255, 255, 255, 0.5);
 }
+.btn.primary *, .primary * { color: #000 !important; }
 .btn.ghost, .ghost { background: rgba(255, 255, 255, 0.025); }
 .btn.text, .text-button { border-color: transparent; color: var(--muted); padding-inline: 0.4rem; }
 .btn:hover, .primary:hover, .ghost:hover, .text-button:hover {
@@ -503,6 +504,76 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Language switch lives in the header on every page */
+.lang-slot { display: flex; align-items: center; }
+html:lang(ko) body { word-break: keep-all; overflow-wrap: break-word; }
+html:lang(ko) h1, html:lang(ko) h2, html:lang(ko) h3 { letter-spacing: -0.02em; }
+html:lang(ko) .nav a, html:lang(ko) .meta, html:lang(ko) .kicker { letter-spacing: 0.04em; text-transform: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.policy-links { margin: 1.25rem 0 0; color: var(--muted); font-size: 0.92rem; }
+.policy-links a { color: var(--ink); text-underline-offset: 3px; }
+
+/* Common footer */
+.foot { flex-direction: column; justify-content: flex-start; gap: 1rem; }
+.foot a:hover { color: var(--ink); }
+.foot-legal { display: grid; gap: 0.5rem; }
+.foot-rights { margin: 0; color: var(--ink); font-size: 0.9rem; letter-spacing: 0.02em; }
+.foot-notice { margin: 0; max-width: 52rem; color: var(--faint); font-size: 0.8rem; line-height: 1.7; overflow-wrap: break-word; }
+
+/* Policy documents */
+.policy { padding: clamp(1.5rem, 4vw, 2.75rem) 0 1rem; }
+.policy-head { max-width: 46rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--line); }
+.policy-brand { display: inline-flex; align-items: center; gap: 0.6rem; margin-bottom: 1.5rem; text-decoration: none; letter-spacing: 0.22em; font-size: 0.78rem; font-weight: 600; }
+.policy-brand svg { width: 1.2rem; height: 1.2rem; }
+.policy-head h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); }
+.policy-head .lede { max-width: 42rem; }
+.policy-dates { display: flex; flex-wrap: wrap; gap: 0.6rem 2.2rem; margin: 1.5rem 0 0; }
+.policy-dates dt { color: var(--faint); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.policy-dates dd { margin: 0.2rem 0 0; color: var(--ink); }
+.policy-dates dd.is-empty, .policy .is-empty { color: var(--faint); font-style: italic; }
+.policy-banner { display: grid; gap: 0.25rem; max-width: 46rem; margin: 1.5rem 0 0; padding: 0.9rem 1.1rem; border: 1px solid var(--line-bright); border-left: 3px solid var(--muted); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 0.92rem; line-height: 1.65; }
+.policy-banner strong { color: var(--ink); font-weight: 600; }
+.policy-layout { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: clamp(2rem, 5vw, 4rem); align-items: start; margin-top: 2rem; }
+.policy-toc { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow: auto; padding-right: 0.5rem; }
+.policy-toc ol { margin: 0.75rem 0 0; padding: 0; list-style: none; counter-reset: toc; border-left: 1px solid var(--line); }
+.policy-toc li { counter-increment: toc; }
+.policy-toc li a { display: block; padding: 0.4rem 0.8rem; color: var(--muted); font-size: 0.88rem; line-height: 1.45; text-decoration: none; overflow-wrap: break-word; transition: color var(--dur) var(--ease); }
+.policy-toc li a::before { content: counter(toc) ". "; color: var(--faint); }
+.policy-toc li a:hover { color: var(--ink); }
+.policy-body { min-width: 0; max-width: 46rem; }
+.policy-section { padding: 1.9rem 0; border-top: 1px solid var(--line); scroll-margin-top: 1.25rem; }
+.policy-section:first-child { border-top: 0; padding-top: 0; }
+.policy-section:focus { outline: none; }
+.policy-section h2 { font-size: 1.3rem; margin-bottom: 0.9rem; line-height: 1.35; }
+.policy-section p, .policy-section li { color: #d5d9de; font-size: 1rem; line-height: 1.8; overflow-wrap: break-word; }
+.policy-section p { margin: 0.75rem 0 0; }
+.policy-section ul { margin: 0.75rem 0 0; padding-left: 1.25rem; }
+.policy-section li + li { margin-top: 0.4rem; }
+.policy-section a, .policy-support a:not(.btn) { color: var(--ink); text-underline-offset: 3px; }
+.policy-table-wrap { margin: 1rem 0 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.policy-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.policy-table th, .policy-table td { padding: 0.75rem 1rem; text-align: left; vertical-align: top; border-top: 1px solid var(--line); line-height: 1.65; overflow-wrap: anywhere; }
+.policy-table thead th { border-top: 0; background: var(--surface-2); color: var(--faint); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
+.policy-table tbody th { width: 34%; color: var(--ink); font-weight: 500; }
+.policy-table td { color: #d5d9de; }
+.policy-step { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 1.5rem; margin-top: 1.4rem; font-size: 0.85rem; }
+.policy-step a { color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); overflow-wrap: break-word; }
+.policy-step a:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.policy-support { margin-top: 1.5rem; padding: 1.5rem; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--surface); }
+.policy-support h2 { font-size: 1.15rem; }
+.policy-support p { margin: 0.5rem 0 0; color: var(--muted); }
+html:lang(ko) .policy-table thead th { letter-spacing: 0.04em; text-transform: none; }
+@media (max-width: 900px) {
+  .policy-layout { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .policy-toc { position: static; max-height: none; padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .policy-toc ol { columns: 1; }
+}
+@media (max-width: 520px) {
+  .policy-table th, .policy-table td { padding: 0.6rem 0.7rem; }
+  .policy-table tbody th { width: 38%; }
+  .policy-step { flex-direction: column; }
+}
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shake {

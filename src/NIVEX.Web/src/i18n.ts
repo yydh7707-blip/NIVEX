@@ -1,4 +1,7 @@
-export const copy = {
+import { getLang } from "./lang.ts";
+import { ko } from "./i18nKo.ts";
+
+export const en = {
   nav: [["/", "Product"], ["/about", "About"], ["/device", "Device ID"], ["/download", "Download"], ["/releases", "Releases"], ["/support", "Support"]],
   footer: [["/guide", "Sign-in"], ["/privacy", "Privacy"], ["/terms", "Terms"], ["/support", "Support"], ["/admin", "Admin"]],
   rights: "© NIVEX. All rights reserved.",
@@ -75,8 +78,12 @@ export const copy = {
   guide: ["Pass the security check and create a Device ID.", "Store the activation and recovery codes somewhere private.", "Open NIVEX and enter the Device ID and activation code.", "Later launches restore the session with the key stored on this PC.", "To move PCs, use the recovery code to detach the old installation, then activate again."],
   releaseTitle: "Release notes",
   releaseBody: "Device ID creation, per-installation activation, session revocation, PC status, settings, this website, and the operator API. Payments and code signing are not included.",
-  privacyTitle: "Privacy draft",
-  termsTitle: "Terms draft",
+  privacyTitle: "Privacy Policy",
+  termsTitle: "Terms of Use",
+  lookupHomeTitle: "Already have a Device ID?",
+  lookupHomeLede: "Confirm your IP address to look up the Device IDs and activation codes created from it, or create a new one (up to 3 per IP).",
+  lookupHomeOpen: "Verify IP and look up",
+  policyNote: "Before you continue, please read:",
   draft: "Draft. Have it reviewed before release. This is not a certification or a promise of absolute security.",
   supportTitle: "Support",
   supportLede: "Until a real channel is configured, the address below is a placeholder.",
@@ -102,4 +109,11 @@ export const copy = {
   removePro: "Revoke PRO",
 } as const;
 
-export type Copy = typeof copy;
+type Loose<T> = T extends string ? string : T extends (...args: never[]) => unknown ? T : T extends object ? { -readonly [K in keyof T]: Loose<T[K]> } : T;
+export type Copy = Loose<typeof en>;
+export type Dictionary = Copy;
+
+// Reads the active language on every access, so a language switch only needs a re-render.
+export const copy: Copy = new Proxy({} as Copy, {
+  get: (_target, key) => (getLang() === "ko" ? ko : (en as Copy))[key as keyof Copy],
+});

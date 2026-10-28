@@ -1,5 +1,5 @@
 import { en, ko, type AboutCopy } from "./aboutCopy.ts";
-import { getLang, setLang, type Lang } from "./lang.ts";
+import { getLang, type Lang } from "./lang.ts";
 import { operator } from "./operator.ts";
 
 export interface AboutConfig {
@@ -48,27 +48,6 @@ function section(id: string, title: string): HTMLElement {
   const heading = el("h2", undefined, title);
   block.append(heading);
   return block;
-}
-
-function switcher(lang: Lang, c: AboutCopy, onChange: (next: Lang) => void): HTMLElement {
-  const group = el("div", "lang-switch");
-  group.setAttribute("role", "group");
-  group.setAttribute("aria-label", `${ko.langLabel} / ${en.langLabel}`);
-  for (const [value, label, name] of [["ko", "한국어", "한국어"], ["en", "English", "English"]] as const) {
-    const button = el("button", "lang-option", label);
-    button.type = "button";
-    button.lang = value;
-    button.dataset.lang = value;
-    button.setAttribute("aria-label", name);
-    button.setAttribute("aria-pressed", String(value === lang));
-    button.addEventListener("click", () => {
-      if (value !== lang) onChange(value);
-    });
-    group.append(button);
-  }
-  const wrap = el("div", "lang-bar");
-  wrap.append(el("span", "meta", c.langLabel), group);
-  return wrap;
 }
 
 function hero(c: AboutCopy, config: AboutConfig): HTMLElement {
@@ -217,17 +196,13 @@ function faq(c: AboutCopy): HTMLElement {
   return block;
 }
 
-export function renderAbout(view: HTMLElement, config: AboutConfig, onLangChange: (lang: Lang) => void): void {
+export function renderAbout(view: HTMLElement, config: AboutConfig): void {
   const lang = getLang();
   const c = aboutCopy(lang);
   document.title = `${c.pageTitle} · NIVEX`;
   const page = el("div", "about");
   page.lang = lang;
   page.append(
-    switcher(lang, c, (next) => {
-      setLang(next);
-      onLangChange(next);
-    }),
     hero(c, config),
     purpose(c),
     features(c),

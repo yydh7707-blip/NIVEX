@@ -218,7 +218,7 @@
     </Style>
 
     <Style TargetType="Button">
-      <Setter Property="Foreground" Value="#111214"/>
+      <Setter Property="Foreground" Value="#000000"/>
       <Setter Property="Background" Value="#F7F8F9"/>
       <Setter Property="BorderBrush" Value="#F7F8F9"/>
       <Setter Property="BorderThickness" Value="1"/>
@@ -247,6 +247,7 @@
               </Border.RenderTransform>
               <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                TextElement.Foreground="{TemplateBinding Foreground}"
                                 RecognizesAccessKey="True"/>
               <VisualStateManager.VisualStateGroups>
                 <VisualStateGroup x:Name="CommonStates">

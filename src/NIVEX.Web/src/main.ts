@@ -3,9 +3,12 @@ import { mountDevicePage } from "./devicePage.ts";
 import { enterPage } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
 import { api } from "./api.ts";
-import { renderAbout, aboutCopy } from "./about.ts";
-import { getLang } from "./lang.ts";
+import { renderAbout } from "./about.ts";
+import { getLang, setLang } from "./lang.ts";
 import { operator } from "./operator.ts";
+import { renderPolicy, documentTitle } from "./policy.ts";
+import { footerCopy, type PolicyKey } from "./policyCopy.ts";
+import { mountIpLookup } from "./ipLookup.ts";
 
 interface PublicConfig {
   version: string;
@@ -18,6 +21,8 @@ interface PublicConfig {
 const view = document.querySelector<HTMLElement>("#view")!;
 const nav = document.querySelector<HTMLElement>(".nav")!;
 const footer = document.querySelector<HTMLElement>(".foot")!;
+const langSlot = document.querySelector<HTMLElement>(".lang-slot")!;
+const skip = document.querySelector<HTMLElement>(".skip")!;
 const INSTALLER_PATH = "/downloads/NIVEX-Setup.exe";
 let config: PublicConfig = { version: "0.3.0", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
 
@@ -44,13 +49,12 @@ async function loadConfig(): Promise<void> {
 }
 
 function paintChrome(): void {
-  const onAbout = location.pathname === "/about";
-  const lang = onAbout ? getLang() : "en";
-  const labels = aboutCopy(lang);
+  const lang = getLang();
   document.documentElement.lang = lang;
-  if (!onAbout) document.title = "NIVEX";
+  nav.setAttribute("aria-label", lang === "ko" ? "주요 메뉴" : "Primary");
+  skip.textContent = lang === "ko" ? "본문으로 건너뛰기" : "Skip to content";
   nav.replaceChildren();
-  for (const [href, label] of labels.chromeNav) {
+  for (const [href, label] of copy.nav) {
     const link = el("a", undefined, label);
     link.href = href;
     link.dataset.link = "";
@@ -58,33 +62,57 @@ function paintChrome(): void {
     nav.append(link);
   }
   const links = el("nav");
-  for (const [href, label] of labels.chromeFooter) {
+  links.setAttribute("aria-label", lang === "ko" ? "하단 메뉴" : "Footer");
+  for (const [href, label] of copy.footer) {
     const link = el("a", undefined, label);
     link.href = href;
     link.dataset.link = "";
     links.append(link);
   }
-  footer.replaceChildren(el("span", undefined, labels.rights), links);
+  const notice = footerCopy[lang];
+  const legal = el("div", "foot-legal");
+  legal.append(el("p", "foot-rights", notice.rights), el("p", "foot-notice", notice.notice));
+  footer.replaceChildren(links, legal);
+  paintLangSwitch();
 }
 
-function renderAboutPage(swapped = false): void {
-  renderAbout(view, config, () => {
-    paintChrome();
-    renderAboutPage(true);
-  });
-  if (!swapped) return;
-  view.querySelector<HTMLElement>(".about")?.classList.add("lang-swap");
-  view.querySelector<HTMLButtonElement>('.lang-option[aria-pressed="true"]')?.focus({ preventScroll: true });
+function paintLangSwitch(): void {
+  const lang = getLang();
+  const group = el("div", "lang-switch");
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", "한국어 / English");
+  for (const [value, label] of [["ko", "한국어"], ["en", "English"]] as const) {
+    const button = el("button", "lang-option", label);
+    button.type = "button";
+    button.lang = value;
+    button.dataset.lang = value;
+    button.setAttribute("aria-pressed", String(value === lang));
+    button.addEventListener("click", () => {
+      if (value === getLang()) return;
+      setLang(value);
+      paintChrome();
+      repaint();
+      langSlot.querySelector<HTMLButtonElement>(`.lang-option[data-lang="${value}"]`)?.focus({ preventScroll: true });
+    });
+    group.append(button);
+  }
+  langSlot.replaceChildren(group);
+}
+
+function renderPolicyPage(key: PolicyKey): void {
+  const lang = getLang();
+  document.title = documentTitle(key, lang);
+  renderPolicy(view, key, lang);
+}
+
+function renderAboutPage(): void {
+  renderAbout(view, config);
 }
 
 function section(title: string): HTMLElement {
   const block = el("section", "section");
   block.append(el("h2", undefined, title));
   return block;
-}
-
-function draftBanner(): HTMLElement {
-  return el("p", "draft", t().draft);
 }
 
 function renderHome(): void {
@@ -124,6 +152,19 @@ function renderHome(): void {
   for (const item of t().req) reqList.append(el("li", undefined, item));
   req.append(reqList, el("p", "meta", `${t().version} ${config.offline ? "—" : config.version}`));
   view.append(hero, what, req);
+  if (!config.offline) mountIpLookup(view);
+}
+
+function policyLinks(): HTMLElement {
+  const row = el("p", "policy-links");
+  const privacy = el("a", undefined, t().privacyTitle);
+  privacy.href = "/privacy";
+  privacy.dataset.link = "";
+  const terms = el("a", undefined, t().termsTitle);
+  terms.href = "/terms";
+  terms.dataset.link = "";
+  row.append(el("span", undefined, t().policyNote + " "), privacy, el("span", undefined, " · "), terms);
+  return row;
 }
 
 function renderDownload(): void {
@@ -136,6 +177,7 @@ function renderDownload(): void {
   } else {
     block.append(el("p", "note", t().downloadMissing));
   }
+  block.append(policyLinks());
   view.append(block);
 }
 
@@ -150,33 +192,6 @@ function renderGuide(): void {
 function renderReleases(): void {
   const block = section(t().releaseTitle);
   block.append(el("p", "kicker", config.offline ? "0.3.0" : config.version), el("p", undefined, t().releaseBody));
-  view.append(block);
-}
-
-function renderPrivacy(): void {
-  const block = section(t().privacyTitle);
-  const lines = [
-    "Collected: Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, authentication events, and a hashed IP used only for rate limits and the three-Device-IDs-per-IP limit. The hashed IP record behind that limit is kept after a device is deleted so the limit cannot be reset. Until a device is activated, its activation code is also kept encrypted so that the IP that created it can look it up again; it is erased on activation.",
-    "Not collected: a password, an email for the device user, card numbers, MAC addresses, hardware serial numbers, or the raw IP address.",
-    "Purpose: authentication, session continuity, revocation, abuse prevention, and later entitlement checks.",
-    "Retention: refresh tokens last until expiry or revocation, authentication events for 180 days, abuse events for 30 days, and idempotency responses for 24 hours. A daily job deletes expired rows.",
-    "Deletion: the support page can delete a device with its recovery code and a new security check. An operator audit row may still contain the Device ID and time.",
-  ];
-  block.append(draftBanner());
-  for (const line of lines) block.append(el("p", undefined, line));
-  view.append(block);
-}
-
-function renderTerms(): void {
-  const block = section(t().termsTitle);
-  const lines = [
-    "NIVEX provides device authentication and PC status. It does not promise a performance increase.",
-    "You are responsible for storing the Device ID and recovery code. Without the recovery code, the same installation cannot be restored except by operator deletion.",
-    "FREE is the default. Payment is not connected in this version, and a local flag cannot grant PRO.",
-    "Do not abuse the service or attempt to take over another installation.",
-  ];
-  block.append(draftBanner());
-  for (const line of lines) block.append(el("p", undefined, line));
   view.append(block);
 }
 
@@ -319,13 +334,13 @@ function renderAdmin(): void {
 
 const pages: Record<string, () => void> = {
   "/": renderHome,
-  "/about": () => renderAboutPage(),
+  "/about": renderAboutPage,
   "/download": renderDownload,
   "/device": renderDevice,
   "/guide": renderGuide,
   "/releases": renderReleases,
-  "/privacy": renderPrivacy,
-  "/terms": renderTerms,
+  "/privacy": () => renderPolicyPage("privacy"),
+  "/terms": () => renderPolicyPage("terms"),
   "/support": renderSupport,
   "/admin": renderAdmin,
 };
@@ -335,12 +350,34 @@ function navigate(path: string): void {
   paint();
 }
 
+function renderCurrent(): void {
+  view.className = "";
+  document.title = "NIVEX";
+  (pages[location.pathname] ?? renderHome)();
+}
+
+// A language switch re-renders in place: same scroll position, no entrance animation.
+function repaint(): void {
+  const y = window.scrollY;
+  view.replaceChildren();
+  renderCurrent();
+  view.classList.add("page-enter", "page-enter-done");
+  window.scrollTo(0, y);
+}
+
 function paint(): void {
   paintChrome();
   view.replaceChildren();
   view.classList.remove("page-enter", "page-enter-done");
-  (pages[location.pathname] ?? renderHome)();
+  renderCurrent();
   enterPage(view);
+  if (location.hash.length > 1) {
+    const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) {
+      target.scrollIntoView();
+      return;
+    }
+  }
   window.scrollTo(0, 0);
   view.focus({ preventScroll: true });
 }
