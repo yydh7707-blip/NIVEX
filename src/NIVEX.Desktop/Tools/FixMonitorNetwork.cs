@@ -79,14 +79,15 @@ public sealed class FixVm : ToolVm
     private string _compare = "";
     private string _diagNote = "";
 
-    public FixVm(FixService fix, ToolkitModel host, bool isAdmin, string version = "")
+    public FixVm(FixService fix, ToolkitModel host, bool isAdmin, string version = "", string dataDir = "")
     {
         _fix = fix;
         _host = host;
         _version = version;
         IsAdmin = isAdmin;
+        Extras = new FixExtrasVm(fix, host, isAdmin, dataDir.Length == 0 ? Path.Combine(Path.GetTempPath(), "nivex-fix") : dataDir);
+        RunAllCommand = new AsyncCommand(_ => RunAllAsync(), _ => !Busy && Rows.Any(r => r.CanRepair));
         ExportCommand = new AsyncCommand(_ => ExportAsync());
-        StartupCommand = new AsyncCommand(_ => LoadStartupAsync(), _ => !Busy);
         ErrorsCommand = new AsyncCommand(_ => LoadErrorsAsync(), _ => !Busy);
         LargeCommand = new AsyncCommand(_ => FindLargeAsync(), _ => !Busy);
         QuickCommand = new AsyncCommand(_ => ScanAsync(false), _ => !Busy);
@@ -97,12 +98,12 @@ public sealed class FixVm : ToolVm
     }
 
     public bool IsAdmin { get; }
+    public FixExtrasVm Extras { get; }
+    public ICommand RunAllCommand { get; }
     public ObservableCollection<FindingRow> Findings { get; } = new();
-    public ObservableCollection<InfoRow> Startup { get; } = new();
     public ObservableCollection<InfoRow> Errors { get; } = new();
     public ObservableCollection<InfoRow> Large { get; } = new();
     public ICommand ExportCommand { get; }
-    public ICommand StartupCommand { get; }
     public ICommand ErrorsCommand { get; }
     public ICommand LargeCommand { get; }
     public bool HasFindings => Findings.Count > 0;
@@ -194,16 +195,33 @@ public sealed class FixVm : ToolVm
         Message = "";
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
+        try { await RepairOneAsync(row, token); }
+        finally
+        {
+            Busy = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+    }
+
+    // Workspace: one confirmation for the plan, then each repair in order. A failed step stops the queue.
+    private async Task RunAllAsync()
+    {
+        var rows = Rows.Where(r => r.CanRepair).GroupBy(r => r.RepairId).Select(g => g.First()).ToList();
+        if (rows.Count == 0) return;
+        var plan = string.Join("\n", rows.Select((r, i) => $"{i + 1}. {ToolText.Get("rep_" + r.RepairId)}"));
+        if (!await _host.Confirm.AskAsync(ToolText.Get("workspaceTitle"), ToolText.F("workspaceBody", plan))) return;
+        Busy = true;
+        Message = "";
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
         try
         {
-            var ids = row.RepairId == "flush-dns" ? new[] { row.Id } : new[] { "disk", "temp" };
-            var before = ids.Select(id => _last.FirstOrDefault(r => r.Id == id)).OfType<CheckResult>().ToList();
-            bool? ok = null;
-            long freed = 0;
-            if (row.RepairId == "flush-dns") ok = await FlushDnsAsync(row, token);
-            else if (row.RepairId == "clean-temp") (ok, freed) = await CleanTempAsync(token);
-            if (ok is null) return;
-            await VerifyAsync(before, ok.Value, freed, token);
+            foreach (var row in rows)
+            {
+                var ok = await RepairOneAsync(row, token);
+                if (ok == false) { Message = ToolText.Get("workspaceStopped"); break; }
+            }
         }
         finally
         {
@@ -211,6 +229,19 @@ public sealed class FixVm : ToolVm
             _cts.Dispose();
             _cts = null;
         }
+    }
+
+    private async Task<bool?> RepairOneAsync(FixRow row, CancellationToken token)
+    {
+        var ids = row.RepairId == "flush-dns" ? new[] { row.Id } : new[] { "disk", "temp" };
+        var before = ids.Select(id => _last.FirstOrDefault(r => r.Id == id)).OfType<CheckResult>().ToList();
+        bool? ok = null;
+        long freed = 0;
+        if (row.RepairId == "flush-dns") ok = await FlushDnsAsync(row, token);
+        else if (row.RepairId == "clean-temp") (ok, freed) = await CleanTempAsync(token);
+        if (ok is null) return null;
+        await VerifyAsync(before, ok.Value, freed, token);
+        return ok;
     }
 
     private async Task VerifyAsync(IReadOnlyList<CheckResult> before, bool repairOk, long freed, CancellationToken token)
@@ -267,15 +298,6 @@ public sealed class FixVm : ToolVm
         {
             Message = ToolText.Get("exportFailed");
         }
-    }
-
-    private async Task LoadStartupAsync()
-    {
-        var entries = await Task.Run(StartupInspector.Read);
-        Startup.Clear();
-        foreach (var e in entries)
-            Startup.Add(new InfoRow(e.Name, $"{e.Location} · {ToolText.Get(e.PathExists ? "pathOk" : "pathMissing")}", !e.PathExists));
-        DiagNote = ToolText.F("startupCount", entries.Count);
     }
 
     private async Task LoadErrorsAsync()

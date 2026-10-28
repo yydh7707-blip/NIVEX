@@ -72,13 +72,16 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
 
     public bool IsScanning => Volatile.Read(ref _scanning) == 1;
 
-    public async Task<IReadOnlyList<CheckResult>> ScanAsync(bool full, IProgress<CheckResult>? progress, CancellationToken ct)
+    public Task<IReadOnlyList<CheckResult>> ScanAsync(bool full, IProgress<CheckResult>? progress, CancellationToken ct) =>
+        ScanIdsAsync(full ? FullIds : QuickIds, progress, ct);
+
+    public async Task<IReadOnlyList<CheckResult>> ScanIdsAsync(IReadOnlyList<string> ids, IProgress<CheckResult>? progress, CancellationToken ct)
     {
         if (Interlocked.Exchange(ref _scanning, 1) == 1) throw new InvalidOperationException("scan already running");
         try
         {
             var results = new List<CheckResult>();
-            foreach (var id in full ? FullIds : QuickIds)
+            foreach (var id in ids)
             {
                 ct.ThrowIfCancellationRequested();
                 progress?.Report(new CheckResult(id, CheckStatus.Checking, ""));
@@ -213,6 +216,32 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
         return result.ExitCode == 0
             ? new CheckResult(id, CheckStatus.Healthy, $"{tool} finished with exit code 0")
             : new CheckResult(id, CheckStatus.Problem, $"{tool} finished with exit code {result.ExitCode}", $"Run '{tool}' manually from an administrator prompt for details.");
+    }
+
+    public static readonly string[] AllIds = [.. FullIds];
+
+    public async Task<CheckResult> AdvancedNetworkRepairAsync(string kind, CancellationToken ct)
+    {
+        var id = "net-" + kind;
+        string[] args = kind switch
+        {
+            "winsock" => ["winsock", "reset"],
+            "tcpip" => ["int", "ip", "reset"],
+            _ => [],
+        };
+        if (args.Length == 0) return new CheckResult(id, CheckStatus.RepairFailed, "unsupported");
+        if (!options.IsAdministrator()) return new CheckResult(id, CheckStatus.RepairFailed, "administrator rights required");
+        try
+        {
+            var result = await runner.RunAsync("netsh", args, TimeSpan.FromSeconds(60), null, ct);
+            return result.ExitCode == 0
+                ? new CheckResult(id, CheckStatus.Repaired, "netsh exit code 0 · restart Windows to apply")
+                : new CheckResult(id, CheckStatus.RepairFailed, $"netsh exit code {result.ExitCode}");
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return new CheckResult(id, CheckStatus.RepairFailed, exception.GetType().Name);
+        }
     }
 
     public async Task<CheckResult> FlushDnsAsync(CancellationToken ct)

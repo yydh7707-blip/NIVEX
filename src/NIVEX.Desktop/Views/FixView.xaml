@@ -89,26 +89,16 @@
 
     <Button Content="{Binding Tx[exportReport]}" Command="{Binding ExportCommand}" Style="{StaticResource SecondaryButton}"
             HorizontalAlignment="Left" Margin="0,18,0,0"/>
+    <Button Content="{Binding Tx[runAll]}" Command="{Binding RunAllCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
 
     <Border Style="{StaticResource Rule}" Margin="0,26,0,16"/>
     <TextBlock Text="{Binding Tx[advancedTitle]}" FontSize="15" FontWeight="Medium"/>
     <TextBlock Text="{Binding Tx[advancedLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
     <WrapPanel>
-      <Button Content="{Binding Tx[startupBtn]}" Command="{Binding StartupCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
       <Button Content="{Binding Tx[errorsBtn]}" Command="{Binding ErrorsCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
       <Button Content="{Binding Tx[largeBtn]}" Command="{Binding LargeCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
     </WrapPanel>
     <TextBlock Text="{Binding DiagNote}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,6"/>
-    <ItemsControl ItemsSource="{Binding Startup}">
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <StackPanel Margin="0,4">
-            <TextBlock Text="{Binding Title}" Foreground="{Binding Brush}" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
-          </StackPanel>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
     <ItemsControl ItemsSource="{Binding Errors}">
       <ItemsControl.ItemTemplate>
         <DataTemplate>
@@ -129,5 +119,128 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <StackPanel x:Name="ExtrasRoot" DataContext="{Binding Extras}">
+      <TextBlock Text="{Binding Note}" Foreground="{StaticResource Silver}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+
+      <Border Style="{StaticResource Rule}" Margin="0,22,0,16"/>
+      <TextBlock Text="{Binding Tx[startupBtn]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[startupNote]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+      <WrapPanel>
+        <Button Content="{Binding Tx[startupBtn]}" Command="{Binding LoadStartupCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+        <Button Content="{Binding Tx[undoBtn]}" Command="{Binding UndoCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      </WrapPanel>
+      <ItemsControl ItemsSource="{Binding Startup}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Grid Margin="0,5">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel Margin="0,0,12,0">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap">
+                  <Run Text="{Binding Detail, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/>
+                </TextBlock>
+              </StackPanel>
+              <Button Grid.Column="1" Content="{Binding ToggleText}" Command="{Binding ToggleCommand}" Style="{StaticResource SecondaryButton}"
+                      VerticalAlignment="Center" Visibility="{Binding CanToggle, Converter={StaticResource BoolVis}}"/>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Style="{StaticResource Rule}" Margin="0,22,0,16"/>
+      <TextBlock Text="{Binding Tx[devBtn]}" FontSize="15" FontWeight="Medium"/>
+      <WrapPanel Margin="0,8,0,0">
+        <Button Content="{Binding Tx[devBtn]}" Command="{Binding DevicesCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+        <Button Content="{Binding Tx[devMgrBtn]}" Command="{Binding DeviceManagerCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      </WrapPanel>
+      <ItemsControl ItemsSource="{Binding Devices}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Margin="0,4">
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Style="{StaticResource Rule}" Margin="0,22,0,16"/>
+      <TextBlock Text="{Binding Tx[netAdvTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[netAdvLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+      <WrapPanel>
+        <Button Content="Winsock" Command="{Binding NetRepairCommand}" CommandParameter="winsock" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+        <Button Content="TCP/IP" Command="{Binding NetRepairCommand}" CommandParameter="tcpip" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      </WrapPanel>
+
+      <Border Style="{StaticResource Rule}" Margin="0,22,0,16"/>
+      <TextBlock Text="{Binding Tx[appTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[appLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+      <Button Content="{Binding Tx[appBtn]}" Command="{Binding AppCheckCommand}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+      <ItemsControl ItemsSource="{Binding AppRows}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Margin="0,4">
+              <TextBlock Text="{Binding Title}" Foreground="{Binding Brush}" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Style="{StaticResource Rule}" Margin="0,22,0,16"/>
+      <TextBlock Text="{Binding Tx[profileTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[profileLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+      <ItemsControl ItemsSource="{Binding Profiles}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Content="{Binding Name}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"
+                    Command="{Binding DataContext.SelectProfileCommand, ElementName=ExtrasRoot}" CommandParameter="{Binding}"/>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Foreground="{StaticResource Silver}" Margin="0,0,0,6"><Run Text="▸ "/><Run Text="{Binding SelectedName, Mode=OneWay}"/></TextBlock>
+      <ItemsControl ItemsSource="{Binding ProfileChecks}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <CheckBox Content="{Binding Title}" IsChecked="{Binding IsOn, Mode=TwoWay}" Margin="0,0,18,6"/>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+        <TextBlock Text="{Binding Tx[intervalLabel]}" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBox Text="{Binding Interval, UpdateSourceTrigger=LostFocus}" Width="60"/>
+      </StackPanel>
+      <CheckBox Content="{Binding Tx[scheduleChk]}" IsChecked="{Binding ScheduleOn, Mode=TwoWay}" Margin="0,10,0,0"/>
+      <TextBlock Text="{Binding ScheduleNote}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"/>
+      <WrapPanel>
+        <Button Content="{Binding Tx[mpRun]}" Command="{Binding RunProfileCommand}" Margin="0,0,10,10"/>
+        <Button Content="{Binding Tx[profDup]}" Command="{Binding DuplicateCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+        <Button Content="{Binding Tx[profDel]}" Command="{Binding DeleteProfileCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+      </WrapPanel>
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+        <TextBox Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Width="180" Margin="0,0,10,0"/>
+        <Button Content="{Binding Tx[profNew]}" Command="{Binding NewProfileCommand}" Style="{StaticResource SecondaryButton}"/>
+      </StackPanel>
+      <ItemsControl ItemsSource="{Binding ProfileResults}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Margin="0,4">
+              <TextBlock Text="{Binding Title}" Foreground="{Binding Brush}" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
   </StackPanel>
 </UserControl>

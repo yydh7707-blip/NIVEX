@@ -1,4 +1,4 @@
-name = "nivex"
+﻿name = "nivex"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
@@ -18,7 +18,7 @@ database_id = "f9799c97-0d69-481d-a3a3-342df31a343c"
 migrations_dir = "migrations"
 
 [vars]
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 TURNSTILE_MODE = "production"
 ALLOW_DEV_VERIFICATION = "false"
 TURNSTILE_SITE_KEY = "0x4AAAAAAFoPrvSH6IcpVO3-"

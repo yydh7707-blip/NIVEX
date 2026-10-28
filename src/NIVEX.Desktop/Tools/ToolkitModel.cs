@@ -36,7 +36,7 @@ public sealed class ToolkitModel : ToolVm, IDisposable
             new ProcessRunner(), network);
 
         Engine = new WorkflowEngine(new SystemStepHost(ConfirmStepAsync));
-        Fix = new FixVm(fixService, this, admin, version);
+        Fix = new FixVm(fixService, this, admin, version, Path.Combine(root, "insight"));
         Monitor = new MonitorVm(Service, this, dispatcher);
         Network = new NetworkVm(network, this, Path.Combine(root, "insight", "network-last.json"));
         Flow = new FlowVm(new WorkflowStore(workflowDir), this);
@@ -83,6 +83,7 @@ public sealed class ToolkitModel : ToolVm, IDisposable
 
     public void StopAll()
     {
+        Fix.Extras.Stop();
         Monitor.Stop();
         Confirm.Dismiss();
     }
