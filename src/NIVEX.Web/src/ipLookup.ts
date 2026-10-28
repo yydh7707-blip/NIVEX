@@ -1,5 +1,6 @@
 import { copy } from "./i18n.ts";
 import { api } from "./api.ts";
+import { clearConsent, consentBody, ct, hasConsent, isTimeout, REQUEST_TIMEOUT_MS } from "./consent.ts";
 
 interface LookupDevice {
   deviceId: string;
@@ -50,6 +51,15 @@ function deviceItem(device: LookupDevice): HTMLElement {
 }
 
 export function mountIpLookup(root: HTMLElement): void {
+  if (!hasConsent()) {
+    const gate = el("section", "section lookup");
+    const go = el("a", "btn ghost", ct().lookupGo);
+    go.href = "/device";
+    go.dataset.link = "";
+    gate.append(el("h2", undefined, copy.lookupTitle), el("p", "note", ct().lookupNeeds), go);
+    root.append(gate);
+    return;
+  }
   const block = el("section", "section lookup");
   const input = el("input");
   input.type = "text";
@@ -91,10 +101,12 @@ export function mountIpLookup(root: HTMLElement): void {
       const response = await fetch(api("/api/v1/ip/devices"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ip: typed }),
+        body: JSON.stringify({ ip: typed, consent: consentBody() }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      const body = await response.json() as { devices?: LookupDevice[]; used?: number; limit?: number; error?: { message: string } };
+      const body = await response.json() as { devices?: LookupDevice[]; used?: number; limit?: number; error?: { code?: string; message: string } };
       if (!response.ok) {
+        if (body.error?.code === "consent_required") clearConsent();
         status.className = "status error is-shake";
         status.textContent = body.error?.message ?? copy.failed;
         return;
@@ -104,9 +116,9 @@ export function mountIpLookup(root: HTMLElement): void {
         ? copy.lookupEmpty
         : copy.lookupCount.replace("{used}", String(body.used ?? devices.length)).replace("{limit}", String(body.limit ?? 3));
       results.replaceChildren(...devices.map(deviceItem));
-    } catch {
+    } catch (error) {
       status.className = "status error is-shake";
-      status.textContent = copy.apiDown;
+      status.textContent = isTimeout(error) ? ct().timedOut : copy.apiDown;
     } finally {
       busy = false;
       run.disabled = false;

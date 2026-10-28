@@ -3,6 +3,7 @@ import { bytesToBase64, utf8 } from "../../src/NIVEX.Api/src/crypto.ts";
 import { isDeviceId } from "../../src/NIVEX.Api/src/ids.ts";
 import { createHarness, readError, testConfig } from "./harness.ts";
 import { handleRequest } from "../../src/NIVEX.Api/src/app.ts";
+import { CONSENT_VERSION } from "../../src/NIVEX.Api/src/routes.ts";
 import { createTurnstileVerifier } from "../../src/NIVEX.Api/src/turnstile.ts";
 
 async function sign(privateKey: CryptoKey, nonce: string): Promise<string> {
@@ -114,6 +115,50 @@ describe("NIVEX API", () => {
     const again = await api.request("/api/v1/ip/devices", { method: "POST", ip: "198.51.100.7", body: JSON.stringify({ ip: "198.51.100.7" }) });
     const second = (await again.json()) as { devices: { status: string; activationCode: string | null }[] };
     expect(second.devices.find((d) => d.status === "active")?.activationCode).toBeNull();
+  });
+
+  it("refuses IP checks, lookups and Device ID creation without a matching consent", async () => {
+    const api = await createHarness();
+    const ip = "198.51.100.21";
+    const verification = await api.request("/api/v1/verification/turnstile", {
+      method: "POST",
+      body: JSON.stringify({ token: "dev-verification", action: "device_create" }),
+    });
+    const { verificationId } = (await verification.json()) as { verificationId: string };
+    const bodies: Array<Record<string, unknown>> = [
+      { ip },
+      { ip, consent: true },
+      { ip, consent: { accepted: false, version: CONSENT_VERSION } },
+      { ip, consent: { accepted: true, version: "1999-01-01" } },
+      { ip, consent: { accepted: true } },
+    ];
+    for (const extra of bodies) {
+      for (const path of ["/api/v1/ip/check", "/api/v1/ip/devices"]) {
+        const res = await api.request(path, { method: "POST", ip, noConsent: true, body: JSON.stringify(extra) });
+        expect([path, res.status, (await readError(res)).code]).toEqual([path, 403, "consent_required"]);
+      }
+      const create = await api.request("/api/v1/devices", {
+        method: "POST",
+        ip,
+        noConsent: true,
+        headers: { "idempotency-key": "consent-key-00000001" },
+        body: JSON.stringify({ verificationId, ...extra }),
+      });
+      expect(create.status).toBe(403);
+      expect((await readError(create)).code).toBe("consent_required");
+    }
+    expect(await api.db.all("SELECT id FROM devices")).toHaveLength(0);
+    expect(await api.db.all("SELECT id FROM ip_claims")).toHaveLength(0);
+
+    const ok = await api.request("/api/v1/devices", {
+      method: "POST",
+      ip,
+      headers: { "idempotency-key": "consent-key-00000002" },
+      body: JSON.stringify({ verificationId }),
+    });
+    expect(ok.status).toBe(201);
+    const records = await api.db.all<{ policy_version: string }>("SELECT policy_version FROM consent_records");
+    expect(records).toEqual([{ policy_version: CONSENT_VERSION }]);
   });
 
   it("counts an IPv6 /64 as one address and ignores formatting differences", async () => {

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleRequest, type AppDeps } from "../../src/NIVEX.Api/src/app.ts";
+import { CONSENT_VERSION } from "../../src/NIVEX.Api/src/routes.ts";
 import type { Config } from "../../src/NIVEX.Api/src/config.ts";
 import type { Db } from "../../src/NIVEX.Api/src/db.ts";
 import { createSqliteDb } from "../../src/NIVEX.Api/src/sqlite.ts";
@@ -39,7 +40,7 @@ export interface Harness {
   db: Db;
   now: Date;
   deps: AppDeps;
-  request(path: string, init?: RequestInit & { ip?: string }): Promise<Response>;
+  request(path: string, init?: RequestInit & { ip?: string; noConsent?: boolean }): Promise<Response>;
 }
 
 export async function createHarness(overrides: Partial<Config> = {}): Promise<Harness> {
@@ -74,9 +75,11 @@ export async function createHarness(overrides: Partial<Config> = {}): Promise<Ha
       const ip = init.ip ?? "203.0.113.10";
       headers.set("cf-connecting-ip", ip);
       let body = init.body;
-      if (path === "/api/v1/devices" && typeof body === "string") {
+      if (["/api/v1/devices", "/api/v1/ip/check", "/api/v1/ip/devices"].includes(path) && typeof body === "string") {
         const parsed = JSON.parse(body) as Record<string, unknown>;
-        if (parsed.ip === undefined) body = JSON.stringify({ ...parsed, ip });
+        if (path === "/api/v1/devices" && parsed.ip === undefined) parsed.ip = ip;
+        if (!init.noConsent && parsed.consent === undefined) parsed.consent = { accepted: true, version: CONSENT_VERSION };
+        body = JSON.stringify(parsed);
       }
       return handleRequest(new Request(`http://127.0.0.1:8787${path}`, { ...init, body, headers }), deps);
     },

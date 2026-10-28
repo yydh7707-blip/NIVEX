@@ -4,6 +4,7 @@ import { transitionPanels, wait } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
 import { api } from "./api.ts";
 import { mountIpLookup } from "./ipLookup.ts";
+import { buildConsentPanel, clearConsent, consentBody, ct, hasConsent, isTimeout, REQUEST_TIMEOUT_MS } from "./consent.ts";
 
 export interface PublicConfig {
   version: string;
@@ -71,6 +72,20 @@ export function mountDevicePage(
 
   const stage = el("div", "flow-stage");
   root.append(stage);
+  if (!hasConsent()) {
+    const consent = buildConsentPanel(
+      () => {
+        stage.replaceChildren();
+        mountVerifyStage(stage, config, onNavigate);
+        mountIpLookup(root);
+      },
+      () => onNavigate("/"),
+    );
+    consent.classList.add("flow-panel", "is-active", "flow-enter");
+    requestAnimationFrame(() => consent.classList.add("flow-enter-done"));
+    stage.append(consent);
+    return;
+  }
   mountVerifyStage(stage, config, onNavigate);
   mountIpLookup(root);
 }
@@ -150,10 +165,18 @@ function buildCreatePanel(
       const response = await fetch(api("/api/v1/ip/check"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ip: typed }),
+        body: JSON.stringify({ ip: typed, consent: consentBody() }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      const body = await response.json() as { remaining?: number; limit?: number; error?: { message: string } };
+      const body = await response.json() as { remaining?: number; limit?: number; error?: { code?: string; message: string } };
       if (!response.ok) {
+        if (body.error?.code === "consent_required") {
+          clearConsent();
+          status.textContent = ct().consentLost;
+          status.classList.add("error", "is-shake");
+          window.setTimeout(() => location.reload(), 1200);
+          return;
+        }
         status.textContent = body.error?.message ?? copy.failed;
         status.classList.add("error", "is-shake");
         return;
@@ -168,8 +191,8 @@ function buildCreatePanel(
       status.textContent = copy.ipRemaining
         .replace("{remaining}", String(body.remaining))
         .replace("{limit}", String(body.limit));
-    } catch {
-      status.textContent = copy.apiDown;
+    } catch (error) {
+      status.textContent = isTimeout(error) ? ct().timedOut : copy.apiDown;
       status.classList.add("error", "is-shake");
     } finally {
       check.disabled = false;
@@ -247,11 +270,13 @@ async function runCreate(
     const response = await fetch(api("/api/v1/devices"), {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": key },
-      body: JSON.stringify({ verificationId, ip }),
+      body: JSON.stringify({ verificationId, ip, consent: consentBody() }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     markSteps(2, 2);
     const body = await response.json() as CreatedDevice & { error?: { code: string; message: string } };
     if (!response.ok) {
+      if (body.error?.code === "consent_required") clearConsent();
       const consumed = body.error?.code === "verification_invalid";
       const ipRejected = body.error?.code === "ip_mismatch" || body.error?.code === "ip_limit" || body.error?.code === "ip_invalid";
       if (consumed || ipRejected) sessionStorage.removeItem("nivex.idempotency");
@@ -265,8 +290,8 @@ async function runCreate(
     await wait(180);
     const done = successPanel(body, false, config, onNavigate);
     transitionPanels(stage, done);
-  } catch {
-    const err = buildErrorPanel(copy.apiDown);
+  } catch (error) {
+    const err = buildErrorPanel(isTimeout(error) ? ct().timedOut : copy.apiDown, onRetryCreate);
     transitionPanels(stage, err);
   }
 }

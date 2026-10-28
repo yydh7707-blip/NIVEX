@@ -143,6 +143,7 @@ function publicConfig(deps: AppDeps): Response {
     version: deps.config.appVersion,
     turnstileSiteKey: deps.config.turnstileSiteKey,
     devVerification,
+    consentVersion: CONSENT_VERSION,
     downloadUrl: deps.config.downloadUrl,
   });
 }
@@ -177,7 +178,22 @@ async function verifyTurnstile(request: Request, deps: AppDeps): Promise<Respons
   return json({ verificationId: id, expiresAt: expires }, 201);
 }
 
+export const CONSENT_VERSION = "2026-10-29";
+
+// The server never trusts a bare `consent: true`; the request must name the policy version being accepted.
+function requireConsent(body: Record<string, unknown>): void {
+  const consent = body.consent;
+  const accepted =
+    typeof consent === "object" && consent !== null && !Array.isArray(consent) &&
+    (consent as Record<string, unknown>).accepted === true &&
+    (consent as Record<string, unknown>).version === CONSENT_VERSION;
+  if (!accepted) {
+    throw new ApiError(403, "consent_required", "IP 주소 수집·이용에 동의해야 이 기능을 사용할 수 있습니다.");
+  }
+}
+
 async function ipQuotaKey(deps: AppDeps, request: Request, body: Record<string, unknown>): Promise<string> {
+  requireConsent(body);
   const typed = parseIp(textField(body, "ip"));
   if (!typed) throw new ApiError(400, "ip_invalid", "IP 주소 형식이 올바르지 않습니다.");
   const seen = parseIp(request.headers.get("cf-connecting-ip") ?? "");
@@ -291,6 +307,10 @@ async function createDevice(request: Request, deps: AppDeps): Promise<Response> 
               params: [entitlementId, deviceId, createdAt, createdAt],
             },
             authEvent(publicId, "create", "success", createdAt),
+            {
+              sql: "INSERT INTO consent_records (id, device_public_id, policy_version, accepted_at) VALUES (?, ?, ?, ?)",
+              params: [crypto.randomUUID(), publicId, CONSENT_VERSION, createdAt],
+            },
             ipClaim(ipHash, publicId, createdAt, await sealCode(deps.config.codePepper, publicId, activationCode)),
           ],
         };

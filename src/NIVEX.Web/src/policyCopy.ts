@@ -58,6 +58,7 @@ const privacyEn: PolicyDoc = {
     ] },
     { id: "methods", title: "4. How information is collected", blocks: [
       p("Information is collected automatically when your browser or the Windows application calls the NIVEX API, and from the values you enter on the website (the IP address, the Device ID and the recovery code). Nothing is collected by purchasing or registering an account, because neither exists in this version."),
+      p("Before the IP verification, lookup or Device ID creation on the website, you must select an unchecked consent box yourself. The server rejects these requests when they do not name the current consent version, and it stores the accepted version and the time with the new Device ID (no IP address is stored in that record). You can refuse: browsing and downloading remain available, but a Device ID cannot be created and the IP-based lookup cannot be used. Separately from this consent, hosting and Cloudflare infrastructure can process your connection IP address when you visit the website; their log retention and storage location have not been verified."),
     ] },
     { id: "retention", title: "5. Retention periods", blocks: [
       table(["Data", "Retention"], [
@@ -138,6 +139,7 @@ const privacyKo: PolicyDoc = {
     ] },
     { id: "methods", title: "4. 개인정보의 수집 및 처리 방법", blocks: [
       p("브라우저나 Windows 프로그램이 NIVEX API를 호출할 때 자동으로 수집되며, 웹사이트에서 직접 입력한 값(IP 주소, Device ID, 복구 코드)도 처리합니다. 이 버전에는 회원가입이나 결제가 없으므로 이를 통한 수집은 없습니다."),
+      p("웹사이트에서 IP 인증, 조회 또는 Device ID 생성을 하기 전에 처음부터 선택되어 있지 않은 동의 체크박스를 직접 선택해야 합니다. 서버는 현재 동의 버전이 포함되지 않은 요청을 거부하며, 새 Device ID와 함께 동의한 버전과 시각을 저장합니다(이 기록에는 IP 주소가 저장되지 않습니다). 동의를 거부해도 둘러보기와 다운로드는 가능하지만 Device ID를 만들거나 IP 기반 조회를 할 수 없습니다. 이 동의와는 별개로 웹사이트에 접속하면 호스팅과 Cloudflare 인프라가 접속 IP 주소를 처리할 수 있으며, 그 로그 보관 기간과 저장 위치는 확인되지 않았습니다."),
     ] },
     { id: "retention", title: "5. 보유 및 이용 기간", blocks: [
       table(["데이터", "보유 기간"], [
