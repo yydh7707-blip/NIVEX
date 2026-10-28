@@ -167,6 +167,14 @@ public sealed class EqualsVisibilityConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => throw new NotSupportedException();
 }
 
+public sealed class EqualsBoolConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal);
+    public object ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
+        value is true ? parameter?.ToString() ?? "" : Binding.DoNothing;
+}
+
 public sealed class AppModel : Observable
 {
     private readonly SessionService _sessions;
@@ -190,11 +198,9 @@ public sealed class AppModel : Observable
         _dispatcher = dispatcher;
         var stored = settings.Load();
         Text.Use(stored.Language);
-        Language = stored.Language;
+        _language = stored.Language == "ko" ? "ko" : "en";
         ReduceMotion = stored.ReduceMotion;
         StartWithWindows = startup.IsEnabled();
-        ApiBaseUrl = stored.ApiBaseUrl;
-        Interval = stored.MetricsIntervalSeconds.ToString();
         Version = typeof(AppModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
         LoginCommand = new RelayCommand(LoginAsync);
         LogoutCommand = new RelayCommand(LogoutAsync);
@@ -238,8 +244,6 @@ public sealed class AppModel : Observable
     private string _language = "en";
     private bool _reduceMotion;
     private bool _startWithWindows;
-    private string _apiBaseUrl = "";
-    private string _interval = "2";
     private string _settingsMessage = "";
 
     public bool ShowShell { get => _showShell; private set => Set(ref _showShell, value); }
@@ -276,11 +280,20 @@ public sealed class AppModel : Observable
     public string Disk { get => _disk; private set => Set(ref _disk, value); }
     public string Network { get => _network; private set => Set(ref _network, value); }
     public string Version { get; }
-    public string Language { get => _language; set => Set(ref _language, value); }
+    public string Language
+    {
+        get => _language;
+        set
+        {
+            var next = value == "ko" ? "ko" : "en";
+            if (_language == next) return;
+            _language = next;
+            Notify(nameof(Language));
+            ApplyLanguage();
+        }
+    }
     public bool ReduceMotion { get => _reduceMotion; set => Set(ref _reduceMotion, value); }
     public bool StartWithWindows { get => _startWithWindows; set => Set(ref _startWithWindows, value); }
-    public string ApiBaseUrl { get => _apiBaseUrl; set => Set(ref _apiBaseUrl, value); }
-    public string Interval { get => _interval; set => Set(ref _interval, value); }
     public string SettingsMessage { get => _settingsMessage; private set => Set(ref _settingsMessage, value); }
     public bool ShowSpinner => Busy && !ReduceMotion;
 
@@ -445,17 +458,9 @@ public sealed class AppModel : Observable
 
     private Task SaveAsync()
     {
-        if (!int.TryParse(Interval, out var seconds)) seconds = 2;
-        if (!Uri.TryCreate(ApiBaseUrl.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            SettingsMessage = Text.Rejected;
-            return Task.CompletedTask;
-        }
         var settings = _settings.Load();
-        settings.Language = Language.Trim().Equals("ko", StringComparison.OrdinalIgnoreCase) ? "ko" : "en";
+        settings.Language = Language;
         settings.ReduceMotion = ReduceMotion;
-        settings.ApiBaseUrl = ProductEndpoints.NormalizeApi(uri.ToString());
-        settings.MetricsIntervalSeconds = Math.Clamp(seconds, 2, 30);
         var savedStartup = _startup.TrySet(StartWithWindows, out _);
         if (!savedStartup)
         {
@@ -466,12 +471,21 @@ public sealed class AppModel : Observable
         _settings.Save(settings);
         Text.Use(settings.Language);
         SettingsMessage = savedStartup ? Text.Saved : Text.Rejected;
-        Interval = settings.MetricsIntervalSeconds.ToString();
-        ApiBaseUrl = settings.ApiBaseUrl;
         Raise(nameof(ShowSpinner));
         Raise(nameof(LoginLabel));
         Raise(nameof(MaskLabel));
         return Task.CompletedTask;
+    }
+
+    private void ApplyLanguage()
+    {
+        var settings = _settings.Load();
+        settings.Language = _language;
+        _settings.Save(settings);
+        Text.Use(_language);
+        SettingsMessage = Text.Saved;
+        Raise(nameof(LoginLabel));
+        Raise(nameof(MaskLabel));
     }
 
     private void WatchIfNeeded()

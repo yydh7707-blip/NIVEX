@@ -7,6 +7,7 @@
         TextOptions.TextFormattingMode="Display" SizeChanged="Window_SizeChanged">
   <Window.Resources>
     <local:EqualsVisibilityConverter x:Key="Eq"/>
+    <local:EqualsBoolConverter x:Key="EqBool"/>
   </Window.Resources>
   <Grid>
     <Grid.Background>
@@ -307,12 +308,13 @@
                 <CheckBox Content="{Binding Text.Motion}" IsChecked="{Binding ReduceMotion}"/>
                 <CheckBox Content="{Binding Text.Startup}" IsChecked="{Binding StartWithWindows}"/>
                 <Border Height="1" Background="{StaticResource Line}" Margin="0,18,0,12"/>
-                <TextBlock Margin="0,16,0,0" Text="{Binding Text.Language}" Style="{StaticResource Caption}"/>
-                <TextBox Text="{Binding Language, UpdateSourceTrigger=PropertyChanged}" MaxWidth="220" HorizontalAlignment="Stretch"/>
-                <TextBlock Margin="0,14,0,0" Text="{Binding Text.Api}" Style="{StaticResource Caption}"/>
-                <TextBox Text="{Binding ApiBaseUrl, UpdateSourceTrigger=PropertyChanged}" MaxWidth="460" HorizontalAlignment="Stretch"/>
-                <TextBlock Margin="0,14,0,0" Text="{Binding Text.Interval}" Style="{StaticResource Caption}"/>
-                <TextBox Text="{Binding Interval, UpdateSourceTrigger=PropertyChanged}" MaxWidth="140" HorizontalAlignment="Stretch"/>
+                <TextBlock Margin="0,16,0,12" Text="{Binding Text.Language}" Style="{StaticResource Caption}"/>
+                <WrapPanel>
+                  <RadioButton GroupName="Lang" Style="{StaticResource ChoiceCard}" Content="한국어"
+                               IsChecked="{Binding Language, Converter={StaticResource EqBool}, ConverterParameter=ko, Mode=TwoWay}"/>
+                  <RadioButton GroupName="Lang" Style="{StaticResource ChoiceCard}" Content="English"
+                               IsChecked="{Binding Language, Converter={StaticResource EqBool}, ConverterParameter=en, Mode=TwoWay}"/>
+                </WrapPanel>
                 <TextBlock Margin="0,16,0,0" Foreground="{StaticResource Muted}" Text="{Binding Text.Privacy}"/>
                 <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Faint}" Text="{Binding Version}"/>
                 <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Silver}" Text="{Binding SettingsMessage}" TextWrapping="Wrap"/>

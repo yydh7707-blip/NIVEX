@@ -203,23 +203,37 @@ public partial class MainWindow : Window
         show.BeginAnimation(OpacityProperty, showFade);
     }
 
-    private void PulseSection()
+    private void PulseSection() =>
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(RunSectionFlow));
+
+    private void RunSectionFlow()
     {
         SectionHost.BeginAnimation(OpacityProperty, null);
-        var shift = SectionHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
-        SectionHost.RenderTransform = shift;
-        shift.BeginAnimation(TranslateTransform.YProperty, null);
-        SectionHost.Opacity = 0.88;
-        shift.Y = 7;
-        var anim = new DoubleAnimation(0.88, 1, TimeSpan.FromMilliseconds(220))
+        SectionHost.Opacity = 1;
+        var panel = SectionHost.Children.OfType<FrameworkElement>().FirstOrDefault(c => c.IsVisible)
+            ?? SectionHost;
+        var items = panel is Panel p ? p.Children.OfType<FrameworkElement>().ToList() : new List<FrameworkElement> { panel };
+        var ease = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 };
+        for (var i = 0; i < items.Count; i++)
         {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-        };
-        SectionHost.BeginAnimation(OpacityProperty, anim);
-        shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(7, 0, TimeSpan.FromMilliseconds(220))
-        {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-        });
+            var item = items[i];
+            var shift = new TranslateTransform(0, 26);
+            item.RenderTransform = shift;
+            item.Opacity = 0;
+            var delay = TimeSpan.FromMilliseconds(Math.Min(i, 10) * 55);
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(520)) { BeginTime = delay, EasingFunction = ease };
+            fade.Completed += (_, _) =>
+            {
+                item.BeginAnimation(OpacityProperty, null);
+                item.Opacity = 1;
+            };
+            item.BeginAnimation(OpacityProperty, fade);
+            shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(26, 0, TimeSpan.FromMilliseconds(720))
+            {
+                BeginTime = delay,
+                EasingFunction = ease,
+            });
+        }
     }
 
     private static void Shake(FrameworkElement target)
