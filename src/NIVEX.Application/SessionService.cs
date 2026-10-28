@@ -15,7 +15,7 @@ public sealed class SessionService(IApiClient api, IVault vault)
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            return new LoginResult(LoginKind.Unavailable, "");
+            return NetworkFailure(exception, cancellationToken);
         }
         if (!challenge.Ok) return MapFailure(challenge.Code);
         var status = challenge.Value?.Status ?? "";
@@ -33,7 +33,7 @@ public sealed class SessionService(IApiClient api, IVault vault)
             }
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
             {
-                return new LoginResult(LoginKind.Unavailable, "");
+                return NetworkFailure(exception, cancellationToken);
             }
             if (activated.Ok && activated.Value is not null)
             {
@@ -164,4 +164,11 @@ public sealed class SessionService(IApiClient api, IVault vault)
         "rate_limited" => new LoginResult(LoginKind.Rejected, code),
         _ => new LoginResult(LoginKind.Unavailable, code),
     };
+
+    private static LoginResult NetworkFailure(Exception exception, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            throw new OperationCanceledException("The login request was canceled.", exception, cancellationToken);
+        return new LoginResult(exception is TaskCanceledException ? LoginKind.TimedOut : LoginKind.Unavailable, "");
+    }
 }

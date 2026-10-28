@@ -8,6 +8,15 @@ namespace NIVEX.UnitTests;
 public sealed class DomainTests
 {
     [Fact]
+    public void Stored_local_api_address_moves_to_the_public_service()
+    {
+        Assert.Equal(ProductEndpoints.Api, ProductEndpoints.NormalizeApi(null));
+        Assert.Equal(ProductEndpoints.Api, ProductEndpoints.NormalizeApi("http://127.0.0.1:8787"));
+        Assert.Equal(ProductEndpoints.Api, ProductEndpoints.NormalizeApi("http://localhost:8787/"));
+        Assert.Equal("https://example.test", ProductEndpoints.NormalizeApi("https://example.test/"));
+    }
+
+    [Fact]
     public void DeviceId_rejects_sequential_and_email_forms()
     {
         Assert.False(DeviceId.IsValid("1"));

@@ -14,9 +14,8 @@ public sealed class JsonSettingsStore : ISettingsStore
             if (!File.Exists(AppPaths.Settings)) return new UserSettings();
             var settings = JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(AppPaths.Settings), Json) ?? new UserSettings();
             settings.MetricsIntervalSeconds = Math.Clamp(settings.MetricsIntervalSeconds, 2, 30);
-            if (settings.Language is not ("ko" or "en")) settings.Language = "ko";
-            if (!Uri.TryCreate(settings.ApiBaseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                settings.ApiBaseUrl = "http://127.0.0.1:8787";
+            if (settings.Language is not ("ko" or "en")) settings.Language = "en";
+            settings.ApiBaseUrl = ProductEndpoints.NormalizeApi(settings.ApiBaseUrl);
             return settings;
         }
         catch (Exception exception) when (exception is JsonException or IOException)

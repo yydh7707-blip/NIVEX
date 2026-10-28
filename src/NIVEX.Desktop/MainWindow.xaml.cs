@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 
 namespace NIVEX.Desktop;
 
@@ -23,15 +25,149 @@ public partial class MainWindow : Window
         {
             if (args.PropertyName is nameof(AppModel.HideInput) or null) SyncSecret();
         };
-        LoginHost.Opacity = model.ShowShell ? 0 : 1;
-        ShellHost.Opacity = model.ShowShell ? 1 : 0;
+        LoginHost.Visibility = model.ShowShell ? Visibility.Collapsed : Visibility.Visible;
+        ShellHost.Visibility = model.ShowShell ? Visibility.Visible : Visibility.Collapsed;
+        Loaded += (_, _) =>
+        {
+            BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            });
+            PlayIntro();
+        };
+    }
+
+    private bool _introDone;
+    private DispatcherTimer? _introTimer;
+    private int _transitionVersion;
+
+    private void PlayIntro()
+    {
+        ApplyColumns();
+        if (Model.ReduceMotion)
+        {
+            FinishIntro();
+            return;
+        }
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        var logoFade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(720)) { BeginTime = TimeSpan.FromMilliseconds(60), EasingFunction = ease };
+        IntroMark.BeginAnimation(OpacityProperty, logoFade);
+        IntroShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(760)) { BeginTime = TimeSpan.FromMilliseconds(60), EasingFunction = ease });
+        IntroBlur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation(14, 0, TimeSpan.FromMilliseconds(820)) { BeginTime = TimeSpan.FromMilliseconds(60), EasingFunction = ease });
+        IntroWordmark.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(360)) { BeginTime = TimeSpan.FromMilliseconds(380), EasingFunction = ease });
+        IntroShine.BeginAnimation(WidthProperty, new DoubleAnimation(0, 44, TimeSpan.FromMilliseconds(300)) { BeginTime = TimeSpan.FromMilliseconds(520), EasingFunction = ease });
+        IntroShine.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 0.58, TimeSpan.FromMilliseconds(300)) { BeginTime = TimeSpan.FromMilliseconds(520), EasingFunction = ease });
+
+        _introTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1320) };
+        _introTimer.Tick += (_, _) => FinishIntro();
+        _introTimer.Start();
+    }
+
+    private void FinishIntro()
+    {
+        if (_introDone) return;
+        _introDone = true;
+        _introTimer?.Stop();
+        IntroHost.IsHitTestVisible = false;
+        if (Model.ReduceMotion)
+        {
+            IntroHost.Visibility = Visibility.Collapsed;
+            BrandPane.Opacity = 1;
+            LoginPane.Opacity = 1;
+            LoginHost.Visibility = Model.ShowShell ? Visibility.Collapsed : Visibility.Visible;
+            ShellHost.Visibility = Model.ShowShell ? Visibility.Visible : Visibility.Collapsed;
+            LoginHost.Opacity = 1;
+            ShellHost.Opacity = 1;
+            return;
+        }
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        var finishFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300)) { EasingFunction = ease };
+        finishFade.Completed += (_, _) => IntroHost.Visibility = Visibility.Collapsed;
+        IntroHost.BeginAnimation(OpacityProperty, finishFade);
+        if (Model.ShowShell)
+        {
+            ShellHost.Visibility = Visibility.Visible;
+            ShellHost.Opacity = 0;
+            ShellHost.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(320)) { EasingFunction = ease });
+            LoginHost.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            LoginHost.Visibility = Visibility.Visible;
+            ShellHost.Visibility = Visibility.Collapsed;
+            LoginHost.Opacity = 1;
+            PlayEntrance();
+        }
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyColumns();
+
+    private void ApplyColumns()
+    {
+        var stack = ActualWidth < 920;
+        if (stack)
+        {
+            Grid.SetColumn(LoginPane, 0);
+            Grid.SetRow(LoginPane, 1);
+            BrandColumn.Width = new GridLength(1, GridUnitType.Star);
+            FormColumn.Width = new GridLength(0);
+            BrandRow.Height = GridLength.Auto;
+            FormRow.Height = new GridLength(1, GridUnitType.Star);
+            ColumnRule.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            Grid.SetColumn(LoginPane, 1);
+            Grid.SetRow(LoginPane, 0);
+            BrandColumn.Width = new GridLength(1, GridUnitType.Star);
+            FormColumn.Width = new GridLength(0.88, GridUnitType.Star);
+            BrandRow.Height = new GridLength(1, GridUnitType.Star);
+            FormRow.Height = new GridLength(0);
+            ColumnRule.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void PlayEntrance()
+    {
+        ApplyColumns();
+        if (Model.ReduceMotion || Model.ShowShell)
+        {
+            BrandPane.Opacity = 1;
+            LoginPane.Opacity = 1;
+            BrandPane.RenderTransform = null;
+            LoginPane.RenderTransform = null;
+            return;
+        }
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        var brandShift = new TranslateTransform(-16, 0);
+        var formShift = new TranslateTransform(0, 12);
+        BrandPane.RenderTransform = brandShift;
+        LoginPane.RenderTransform = formShift;
+        BrandPane.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(380)) { EasingFunction = ease });
+        brandShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-16, 0, TimeSpan.FromMilliseconds(380)) { EasingFunction = ease });
+        var delay = TimeSpan.FromMilliseconds(60);
+        LoginPane.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(380)) { BeginTime = delay, EasingFunction = ease });
+        formShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(12, 0, TimeSpan.FromMilliseconds(380)) { BeginTime = delay, EasingFunction = ease });
     }
 
     private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (Model.ReduceMotion) return;
-        if (e.PropertyName is nameof(AppModel.ShowShell))
+        if (e.PropertyName is nameof(AppModel.ShowShell) && _introDone)
             CrossFade(Model.ShowShell ? ShellHost : LoginHost, Model.ShowShell ? LoginHost : ShellHost);
+        if (e.PropertyName is nameof(AppModel.LoginError))
+        {
+            var hasError = !string.IsNullOrWhiteSpace(Model.LoginError);
+            LoginErrorHost.Visibility = hasError ? Visibility.Visible : Visibility.Collapsed;
+            if (hasError && !Model.ReduceMotion)
+            {
+                LoginErrorHost.Opacity = 0;
+                LoginErrorHost.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+                });
+            }
+        }
+        if (Model.ReduceMotion) return;
         if (e.PropertyName is nameof(AppModel.Section))
             PulseSection();
         if (e.PropertyName is nameof(AppModel.LoginError) && !string.IsNullOrWhiteSpace(Model.LoginError))
@@ -40,19 +176,50 @@ public partial class MainWindow : Window
 
     private void CrossFade(UIElement show, UIElement hide)
     {
+        var transition = ++_transitionVersion;
+        var hideOpacity = hide.Opacity;
+        show.BeginAnimation(OpacityProperty, null);
+        hide.BeginAnimation(OpacityProperty, null);
+        hide.Opacity = hideOpacity;
+        show.Visibility = Visibility.Visible;
+        show.Opacity = 0;
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-        hide.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
-        show.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(280)) { EasingFunction = ease });
+        var hideFade = new DoubleAnimation(hide.Opacity, 0, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease };
+        hideFade.Completed += (_, _) =>
+        {
+            if (transition != _transitionVersion) return;
+            hide.Visibility = Visibility.Collapsed;
+            hide.BeginAnimation(OpacityProperty, null);
+            hide.Opacity = 1;
+        };
+        hide.BeginAnimation(OpacityProperty, hideFade);
+        var showFade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease };
+        showFade.Completed += (_, _) =>
+        {
+            if (transition != _transitionVersion) return;
+            show.BeginAnimation(OpacityProperty, null);
+            show.Opacity = 1;
+        };
+        show.BeginAnimation(OpacityProperty, showFade);
     }
 
     private void PulseSection()
     {
         SectionHost.BeginAnimation(OpacityProperty, null);
-        var anim = new DoubleAnimation(0.92, 1, TimeSpan.FromMilliseconds(260))
+        var shift = SectionHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        SectionHost.RenderTransform = shift;
+        shift.BeginAnimation(TranslateTransform.YProperty, null);
+        SectionHost.Opacity = 0.88;
+        shift.Y = 7;
+        var anim = new DoubleAnimation(0.88, 1, TimeSpan.FromMilliseconds(220))
         {
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
         };
         SectionHost.BeginAnimation(OpacityProperty, anim);
+        shift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(7, 0, TimeSpan.FromMilliseconds(220))
+        {
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+        });
     }
 
     private static void Shake(FrameworkElement target)

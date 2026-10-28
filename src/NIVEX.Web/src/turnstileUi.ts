@@ -39,18 +39,23 @@ export async function mountTurnstile(
   const finish = async (token: string) => {
     status.replaceChildren(el("span", "spinner"), document.createTextNode(copy.verifying));
     status.className = "status";
-    const response = await fetch(api("/api/v1/verification/turnstile"), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, action }),
-    });
-    const body = await response.json() as { verificationId?: string; error?: { message: string } };
-    if (!response.ok || !body.verificationId) {
-      status.textContent = body.error?.message ?? copy.failed;
+    try {
+      const response = await fetch(api("/api/v1/verification/turnstile"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, action }),
+      });
+      const body = await response.json() as { verificationId?: string; error?: { message: string } };
+      if (!response.ok || !body.verificationId) {
+        status.textContent = body.error?.message ?? copy.failed;
+        status.className = "status error is-shake";
+        return;
+      }
+      onOk(body.verificationId);
+    } catch {
+      status.textContent = copy.apiDown;
       status.className = "status error is-shake";
-      return;
     }
-    onOk(body.verificationId);
   };
 
   if (config.devVerification && !config.turnstileSiteKey) {
@@ -67,8 +72,19 @@ export async function mountTurnstile(
     status.className = "status error";
     return;
   }
-  await loadTurnstile();
-  window.turnstile?.render(widget, {
+  try {
+    await loadTurnstile();
+  } catch {
+    status.textContent = copy.apiDown;
+    status.className = "status error";
+    return;
+  }
+  if (!window.turnstile) {
+    status.textContent = copy.failed;
+    status.className = "status error";
+    return;
+  }
+  window.turnstile.render(widget, {
     sitekey: config.turnstileSiteKey,
     action,
     callback: (token: string) => void finish(token),

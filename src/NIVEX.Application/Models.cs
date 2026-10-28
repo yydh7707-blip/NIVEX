@@ -45,7 +45,7 @@ public sealed class ApiEnvelope
 
 public sealed record ApiResult<T>(bool Ok, int Status, string Code, string Message, T? Value);
 
-public enum LoginKind { Success, NeedsActivation, NeedsRecovery, InvalidId, Revoked, Unavailable, Rejected }
+public enum LoginKind { Success, NeedsActivation, NeedsRecovery, InvalidId, BadCode, Revoked, Unavailable, TimedOut, Rejected }
 
 public sealed record LoginResult(LoginKind Kind, string ServerMessage);
 
@@ -68,10 +68,10 @@ public sealed class VaultState
 
 public sealed class UserSettings
 {
-    public string Language { get; set; } = "ko";
+    public string Language { get; set; } = "en";
     public bool ReduceMotion { get; set; }
     public bool StartWithWindows { get; set; }
-    public string ApiBaseUrl { get; set; } = "http://127.0.0.1:8787";
+    public string ApiBaseUrl { get; set; } = ProductEndpoints.Api;
     public int MetricsIntervalSeconds { get; set; } = 2;
 }
 

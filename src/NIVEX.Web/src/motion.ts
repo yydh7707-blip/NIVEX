@@ -22,7 +22,12 @@ export function transitionPanels(
     return;
   }
   current.classList.add("flow-exit");
+  let finished = false;
+  let fallback = 0;
   const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.clearTimeout(fallback);
     current.removeEventListener("transitionend", finish);
     container.replaceChildren(next);
     next.classList.add("flow-panel", "is-active", "flow-enter");
@@ -32,7 +37,7 @@ export function transitionPanels(
     });
   };
   current.addEventListener("transitionend", finish, { once: true });
-  window.setTimeout(finish, 320);
+  fallback = window.setTimeout(finish, 320);
 }
 
 export async function wait(ms: number): Promise<void> {

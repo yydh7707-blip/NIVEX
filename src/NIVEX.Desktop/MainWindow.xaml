@@ -2,203 +2,340 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:NIVEX.Desktop"
-        Title="NIVEX" Width="1180" Height="760" MinWidth="960" MinHeight="640"
-        WindowStartupLocation="CenterScreen">
+        Title="NIVEX" Icon="/Assets/nivex-mark.png" Width="1180" Height="760" MinWidth="760" MinHeight="600" Opacity="0"
+        WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display" SizeChanged="Window_SizeChanged">
   <Window.Resources>
     <local:EqualsVisibilityConverter x:Key="Eq"/>
   </Window.Resources>
   <Grid>
     <Grid.Background>
-      <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#070708" Offset="0"/>
-        <GradientStop Color="#050506" Offset="1"/>
-      </LinearGradientBrush>
+      <SolidColorBrush Color="#000000"/>
     </Grid.Background>
-    <Rectangle IsHitTestVisible="False" Opacity="0.5">
-      <Rectangle.Fill>
-        <RadialGradientBrush Center="0.12,0" GradientOrigin="0.12,0" RadiusX="0.85" RadiusY="0.5">
-          <GradientStop Color="#12FFFFFF" Offset="0"/>
-          <GradientStop Color="#00FFFFFF" Offset="1"/>
-        </RadialGradientBrush>
-      </Rectangle.Fill>
-    </Rectangle>
 
-    <Grid Margin="32,26,32,28">
+    <Grid x:Name="LoginHost">
+      <Grid x:Name="LoginLayout">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition x:Name="BrandColumn" Width="1.12*"/>
+          <ColumnDefinition x:Name="FormColumn" Width="0.88*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+          <RowDefinition x:Name="BrandRow" Height="*"/>
+          <RowDefinition x:Name="FormRow" Height="0"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer x:Name="BrandPane" Grid.Row="0" Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Opacity="0">
+          <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="48,36">
+              <Image Source="/Assets/nivex-mark.png" Width="248" Height="248" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center"/>
+              <Border Height="1" Width="52" HorizontalAlignment="Center" Background="{StaticResource Silver}" Margin="0,2,0,18" Opacity="0.68"/>
+              <TextBlock Text="{Binding Text.Brand}" FontSize="15" Foreground="{StaticResource Muted}" LineHeight="23" TextAlignment="Center" MaxWidth="340"/>
+            </StackPanel>
+            <TextBlock Text="{Binding Version}" Foreground="{StaticResource Faint}" FontSize="12" VerticalAlignment="Bottom" Margin="56,0,24,28"/>
+          </Grid>
+        </ScrollViewer>
+
+        <Rectangle x:Name="ColumnRule" Grid.Column="0" Grid.Row="0" Width="1" HorizontalAlignment="Right" Fill="#33C5CCD4" IsHitTestVisible="False"/>
+
+        <ScrollViewer x:Name="LoginPane" Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Opacity="0">
+          <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch" MaxWidth="430" Margin="48,38">
+              <TextBlock Text="{Binding Text.LoginEyebrow}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,22"/>
+              <TextBlock Text="{Binding Text.Welcome}" FontSize="34" FontWeight="Medium" Foreground="#FFFFFF" LineHeight="42" Margin="0,0,0,10"/>
+              <TextBlock Text="{Binding Text.Lead}" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="23" Margin="0,0,0,28"/>
+
+              <TextBlock Text="{Binding Text.DeviceId}" Style="{StaticResource Caption}"/>
+              <Grid MinHeight="50" Margin="0,0,0,18">
+                <TextBox x:Name="DeviceBox" Text="{Binding LoginDeviceId, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{Binding Text.DeviceId}"/>
+                <TextBlock Text="{Binding Text.IdHint}" IsHitTestVisible="False" Foreground="#66707A" Margin="16,0,12,0" VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed"/>
+                      <Style.Triggers>
+                        <MultiDataTrigger>
+                          <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding LoginDeviceId}" Value=""/>
+                            <Condition Binding="{Binding HideInput}" Value="False"/>
+                          </MultiDataTrigger.Conditions>
+                          <Setter Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+                <PasswordBox x:Name="DeviceSecret" PasswordChanged="SecretChanged" Visibility="Collapsed" AutomationProperties.Name="{Binding Text.DeviceId}"/>
+              </Grid>
+
+              <TextBlock Text="{Binding Text.Activation}" Style="{StaticResource Caption}"/>
+              <Grid MinHeight="50" Margin="0,0,0,4">
+                <TextBox Text="{Binding LoginCode, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{Binding Text.Activation}"/>
+                <TextBlock Text="{Binding Text.CodeHint}" IsHitTestVisible="False" Foreground="#66707A" Margin="16,0,12,0" VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding LoginCode}" Value="">
+                          <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </Grid>
+
+              <CheckBox Content="{Binding Text.Remember}" IsChecked="{Binding Remember}"/>
+              <CheckBox Content="{Binding Text.Hide}" IsChecked="{Binding HideInput}" Checked="HideChanged" Unchecked="HideChanged"/>
+
+              <Border x:Name="LoginErrorHost" Background="#12FFFFFF" BorderBrush="#4DF0D2CC" BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,14,0,0" MinHeight="36" Visibility="Collapsed">
+                <TextBlock x:Name="LoginErrorText" Text="{Binding LoginError}" Foreground="{StaticResource Danger}" FontSize="13" TextWrapping="Wrap"/>
+              </Border>
+
+              <Button Command="{Binding LoginCommand}" IsDefault="True" Margin="0,18,0,0" HorizontalAlignment="Stretch" MinHeight="50">
+                <Grid MinHeight="22">
+                  <TextBlock Text="{Binding LoginLabel}" Foreground="#111214" HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Visibility="{Binding ShowSpinner, Converter={StaticResource Eq}, ConverterParameter=False}"/>
+                  <Ellipse Width="16" Height="16" Stroke="#111214" StrokeThickness="1.6" StrokeDashArray="3.1 2.1"
+                           RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse.RenderTransform>
+                      <RotateTransform/>
+                    </Ellipse.RenderTransform>
+                    <Ellipse.Style>
+                      <Style TargetType="Ellipse">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding ShowSpinner}" Value="True">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <DataTrigger.EnterActions>
+                              <BeginStoryboard x:Name="LoginSpin">
+                                <Storyboard RepeatBehavior="Forever">
+                                  <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" From="0" To="360" Duration="0:0:0.85"/>
+                                </Storyboard>
+                              </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                              <StopStoryboard BeginStoryboardName="LoginSpin"/>
+                            </DataTrigger.ExitActions>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Ellipse.Style>
+                  </Ellipse>
+                </Grid>
+              </Button>
+              <Button Content="{Binding Text.CreateLink}" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0" HorizontalAlignment="Stretch" MinHeight="46" Click="OpenCreate"/>
+            </StackPanel>
+          </Grid>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+
+    <Grid x:Name="ShellHost" Margin="28,24,28,24" Visibility="Collapsed">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
-      <DockPanel Margin="0,0,0,18">
-        <TextBlock Text="NIVEX" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      <DockPanel Margin="4,0,4,16">
+        <Image Source="/Assets/nivex-mark.png" Width="42" Height="42" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center"/>
+        <TextBlock Text="NIVEX" FontSize="15" FontWeight="Medium" Foreground="#FFFFFF" VerticalAlignment="Center" Margin="12,0,0,0"/>
         <TextBlock DockPanel.Dock="Right" Text="{Binding Version}" Foreground="{StaticResource Faint}" VerticalAlignment="Center"/>
       </DockPanel>
-
-      <Grid Grid.Row="1">
-        <Border x:Name="LoginHost" Style="{StaticResource SurfaceCard}" MaxWidth="440" HorizontalAlignment="Left" VerticalAlignment="Top"
-                Visibility="{Binding ShowShell, Converter={StaticResource Eq}, ConverterParameter=False}">
+      <Grid x:Name="DashboardLayout" Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition x:Name="ShellNavColumn" Width="184"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource SurfaceCard}" Padding="10,14" Margin="0,0,14,0" VerticalAlignment="Stretch">
           <StackPanel>
-            <TextBlock Text="{Binding Text.Welcome}" Style="{StaticResource PageTitle}"/>
-            <TextBlock Text="{Binding Text.Lead}" Style="{StaticResource Caption}" Margin="0,0,0,16"/>
-            <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Danger}" Margin="0,0,0,10"/>
-            <TextBlock Text="{Binding Text.DeviceId}" Style="{StaticResource Caption}"/>
-            <TextBox x:Name="DeviceBox" Text="{Binding LoginDeviceId, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" AutomationProperties.Name="{Binding Text.DeviceId}"/>
-            <PasswordBox x:Name="DeviceSecret" Margin="0,0,0,12" PasswordChanged="SecretChanged" Visibility="Collapsed"/>
-            <TextBlock Text="{Binding Text.Activation}" Style="{StaticResource Caption}"/>
-            <TextBox Text="{Binding LoginCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" AutomationProperties.Name="{Binding Text.Activation}"/>
-            <CheckBox Content="{Binding Text.Remember}" IsChecked="{Binding Remember}"/>
-            <CheckBox Content="{Binding Text.Hide}" IsChecked="{Binding HideInput}" Checked="HideChanged" Unchecked="HideChanged"/>
-            <TextBlock x:Name="LoginErrorText" Text="{Binding LoginError}" Foreground="{StaticResource Danger}" Margin="0,12,0,0" MinHeight="22"/>
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-              <Button Content="{Binding Text.Login}" Command="{Binding LoginCommand}" IsDefault="True" MinWidth="128"/>
-              <TextBlock Text="{Binding Text.Measuring}" Margin="14,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Muted}"
-                         Visibility="{Binding ShowSpinner, Converter={StaticResource Eq}, ConverterParameter=True}"/>
-              <Button Content="{Binding Text.CreateLink}" Style="{StaticResource Ghost}" Margin="10,0,0,0" Click="OpenCreate"/>
+            <StackPanel Orientation="Horizontal" Margin="10,2,0,18">
+              <Image Source="/Assets/nivex-mark.png" Width="26" Height="26" Stretch="Uniform"/>
+              <StackPanel Margin="9,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="NIVEX" FontSize="12" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Version}" Foreground="{StaticResource Faint}" FontSize="10"/>
+              </StackPanel>
             </StackPanel>
+            <Border Height="1" Background="{StaticResource Line}" Margin="4,0,4,14"/>
+            <Button Tag="Home" Click="Nav" AutomationProperties.Name="{Binding Text.Home}">
+              <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Section}" Value="Home">
+                      <Setter Property="Background" Value="#1AFFFFFF"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <StackPanel Orientation="Horizontal">
+                <Path Data="M2,8 L9,2 16,8 16,16 11,16 11,11 7,11 7,16 2,16 Z" Stroke="{StaticResource Silver}" StrokeThickness="1.2" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
+                <TextBlock Text="{Binding Text.Home}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Tag="Overview" Click="Nav" AutomationProperties.Name="{Binding Text.Overview}">
+              <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Section}" Value="Overview">
+                      <Setter Property="Background" Value="#1AFFFFFF"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <StackPanel Orientation="Horizontal">
+                <Path Data="M2,15 L6,10 9,12 14,5 17,7" Stroke="{StaticResource Silver}" StrokeThickness="1.3" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
+                <TextBlock Text="{Binding Text.Overview}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Tag="Device" Click="Nav" AutomationProperties.Name="{Binding Text.Device}">
+              <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Section}" Value="Device">
+                      <Setter Property="Background" Value="#1AFFFFFF"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <StackPanel Orientation="Horizontal">
+                <Path Data="M4,1 L14,1 17,4 17,17 4,17 Z M14,1 L14,4 17,4 M7,8 L14,8 M7,11 L14,11 M7,14 L12,14" Stroke="{StaticResource Silver}" StrokeThickness="1.1" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
+                <TextBlock Text="{Binding Text.Device}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Button Tag="Settings" Click="Nav" AutomationProperties.Name="{Binding Text.Settings}">
+              <Button.Style>
+                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Section}" Value="Settings">
+                      <Setter Property="Background" Value="#1AFFFFFF"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Button.Style>
+              <StackPanel Orientation="Horizontal">
+                <Path Data="M9,1 L11,1 12,4 14,5 17,4 18,6 16,9 16,11 18,14 17,16 14,15 12,16 11,19 9,19 8,16 6,15 3,16 2,14 4,11 4,9 2,6 3,4 6,5 8,4 Z M10,7 A3,3 0 1 0 10,13 A3,3 0 1 0 10,7" Stroke="{StaticResource Silver}" StrokeThickness="1.1" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
+                <TextBlock Text="{Binding Text.Settings}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <Border Height="1" Background="{StaticResource Line}" Margin="4,10,4,12"/>
+            <Button Content="{Binding Text.Logout}" Style="{StaticResource NavItem}" Margin="0,18,0,0" Command="{Binding LogoutCommand}"/>
           </StackPanel>
         </Border>
-
-        <Grid x:Name="ShellHost" Visibility="{Binding ShowShell, Converter={StaticResource Eq}, ConverterParameter=True}">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="196"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-          <Border Style="{StaticResource SurfaceCard}" Padding="14,18" Margin="0,0,16,0" VerticalAlignment="Stretch">
-            <StackPanel>
-              <Button Content="{Binding Text.Home}" Tag="Home" Click="Nav">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding Section}" Value="Home">
-                        <Setter Property="Background" Value="#1AFFFFFF"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-              </Button>
-              <Button Content="{Binding Text.Overview}" Tag="Overview" Click="Nav">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding Section}" Value="Overview">
-                        <Setter Property="Background" Value="#1AFFFFFF"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-              </Button>
-              <Button Content="{Binding Text.Device}" Tag="Device" Click="Nav">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding Section}" Value="Device">
-                        <Setter Property="Background" Value="#1AFFFFFF"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-              </Button>
-              <Button Content="{Binding Text.Settings}" Tag="Settings" Click="Nav">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding Section}" Value="Settings">
-                        <Setter Property="Background" Value="#1AFFFFFF"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-              </Button>
-              <Button Content="{Binding Text.Logout}" Style="{StaticResource NavItem}" Margin="0,18,0,0" Command="{Binding LogoutCommand}"/>
-            </StackPanel>
-          </Border>
-          <Border Grid.Column="1" Style="{StaticResource SurfaceCard}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-              <StackPanel x:Name="SectionHost" MinHeight="360">
-                <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Home}">
-                  <TextBlock Text="{Binding Text.Welcome}" Style="{StaticResource PageTitle}"/>
-                  <TextBlock Foreground="{StaticResource Muted}" Text="{Binding Auth}"/>
-                  <TextBlock Margin="0,8,0,0" Text="{Binding DeviceStatus}"/>
-                  <TextBlock Margin="0,4,0,0" Text="{Binding Plan}"/>
-                  <Border Style="{StaticResource MetricTile}" Margin="0,18,0,0" HorizontalAlignment="Left">
+        <Border Grid.Column="1" Style="{StaticResource SurfaceCard}">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="SectionHost" MinHeight="360" RenderTransformOrigin="0.5,0">
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Home}">
+                <TextBlock Text="{Binding Text.Workspace}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
+                <TextBlock Text="{Binding Text.Welcome}" Style="{StaticResource PageTitle}"/>
+                <TextBlock Text="{Binding Text.WorkspaceLead}" Foreground="{StaticResource Muted}" MaxWidth="560" Margin="0,0,0,24"/>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,20"/>
+                <Grid Margin="0,0,0,22">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Text.Authentication}" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="{Binding Auth}" FontSize="17" FontWeight="Medium"/>
+                    <TextBlock Text="{Binding DeviceStatus}" Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Text.Entitlement}" Style="{StaticResource Caption}"/>
+                    <TextBlock Text="{Binding Plan}" FontSize="17" FontWeight="Medium"/>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="{Binding Text.Activity}" Style="{StaticResource Caption}"/>
+                <TextBlock Text="{Binding Activity}" FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,20,0,4"/>
+                <WrapPanel Margin="0,8,0,0">
+                  <Button Content="{Binding Text.Summary}" Command="{Binding CopyCommand}" Style="{StaticResource Ghost}" Margin="0,0,10,10"/>
+                  <Button Content="{Binding Text.OpenSite}" Command="{Binding OpenCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+                </WrapPanel>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Device}">
+                <TextBlock Text="{Binding Text.Account}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
+                <TextBlock Text="{Binding Text.Device}" Style="{StaticResource PageTitle}"/>
+                <TextBlock Text="{Binding Text.Guidance}" Foreground="{StaticResource Muted}" Margin="0,0,0,20" MaxWidth="620"/>
+                <Border Background="{StaticResource SurfaceBase}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="7" Padding="16,14">
+                  <TextBlock Text="{Binding ShownId}" FontFamily="Cascadia Mono, Consolas" FontSize="17" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                </Border>
+                <WrapPanel Margin="0,12,0,0">
+                  <Button Content="{Binding MaskLabel}" Style="{StaticResource Ghost}" Click="ToggleMask" Margin="0,0,8,8"/>
+                  <Button Content="{Binding Text.Copy}" Style="{StaticResource SecondaryButton}" Command="{Binding CopyIdCommand}" Margin="0,0,8,8"/>
+                </WrapPanel>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,18,0,14"/>
+                <TextBlock Text="{Binding Auth}" FontWeight="Medium"/>
+                <TextBlock Margin="0,5,0,0" Foreground="{StaticResource Muted}" Text="{Binding LastVerified}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Overview}">
+                <TextBlock Text="{Binding Text.LocalReadings}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
+                <TextBlock Text="{Binding Text.Overview}" Style="{StaticResource PageTitle}"/>
+                <TextBlock Text="{Binding Text.ReadingsPrivacy}" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
+                <WrapPanel Margin="0,12,0,0">
+                  <Border Style="{StaticResource MetricTile}">
                     <StackPanel>
-                      <TextBlock Text="{Binding Text.Activity}" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Activity}" FontFamily="Cascadia Mono, Consolas" FontSize="13"/>
+                      <TextBlock Text="CPU" Style="{StaticResource Caption}" Margin="0"/>
+                      <TextBlock Text="{Binding Cpu}" TextWrapping="Wrap"/>
                     </StackPanel>
                   </Border>
-                  <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
-                    <Button Content="{Binding Text.Summary}" Command="{Binding CopyCommand}" Style="{StaticResource Ghost}" Margin="0,0,10,0"/>
-                    <Button Content="{Binding Text.OpenSite}" Command="{Binding OpenCommand}" Style="{StaticResource Ghost}"/>
-                  </StackPanel>
-                </StackPanel>
-                <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Device}">
-                  <TextBlock Text="{Binding Text.Device}" Style="{StaticResource PageTitle}"/>
-                  <Border Style="{StaticResource MetricTile}" Margin="0,12,0,0" HorizontalAlignment="Stretch">
-                    <TextBlock Text="{Binding ShownId}" FontFamily="Cascadia Mono, Consolas" FontSize="17" TextWrapping="Wrap"/>
+                  <Border Style="{StaticResource MetricTile}">
+                    <StackPanel>
+                      <TextBlock Text="Memory" Style="{StaticResource Caption}" Margin="0"/>
+                      <TextBlock Text="{Binding Memory}" TextWrapping="Wrap"/>
+                    </StackPanel>
                   </Border>
-                  <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                    <Button Content="{Binding MaskLabel}" Style="{StaticResource Ghost}" Click="ToggleMask"/>
-                    <Button Content="{Binding Text.Copy}" Margin="10,0,0,0" Command="{Binding CopyIdCommand}"/>
-                  </StackPanel>
-                  <TextBlock Margin="0,18,0,0" Text="{Binding Auth}"/>
-                  <TextBlock Margin="0,6,0,0" Foreground="{StaticResource Muted}" Text="{Binding LastVerified}"/>
-                  <TextBlock Margin="0,16,0,0" Foreground="{StaticResource Muted}" Text="{Binding Text.Guidance}"/>
-                </StackPanel>
-                <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Overview}">
-                  <TextBlock Text="{Binding Text.Overview}" Style="{StaticResource PageTitle}"/>
-                  <WrapPanel Margin="0,12,0,0">
-                    <Border Style="{StaticResource MetricTile}">
-                      <StackPanel>
-                        <TextBlock Text="CPU" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Text="{Binding Cpu}" TextWrapping="Wrap"/>
-                      </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource MetricTile}">
-                      <StackPanel>
-                        <TextBlock Text="Memory" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Text="{Binding Memory}" TextWrapping="Wrap"/>
-                      </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource MetricTile}">
-                      <StackPanel>
-                        <TextBlock Text="GPU" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Text="{Binding Gpu}" TextWrapping="Wrap"/>
-                      </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource MetricTile}">
-                      <StackPanel>
-                        <TextBlock Text="Disk" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Text="{Binding Disk}" TextWrapping="Wrap"/>
-                      </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource MetricTile}">
-                      <StackPanel>
-                        <TextBlock Text="Network" Style="{StaticResource Caption}" Margin="0"/>
-                        <TextBlock Text="{Binding Network}" TextWrapping="Wrap"/>
-                      </StackPanel>
-                    </Border>
-                  </WrapPanel>
-                  <Button Margin="0,6,0,0" HorizontalAlignment="Left" Content="{Binding Text.Refresh}" Command="{Binding RefreshCommand}" Style="{StaticResource Ghost}"/>
-                </StackPanel>
-                <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Settings}">
-                  <TextBlock Text="{Binding Text.Settings}" Style="{StaticResource PageTitle}"/>
-                  <CheckBox Content="{Binding Text.Motion}" IsChecked="{Binding ReduceMotion}"/>
-                  <CheckBox Content="{Binding Text.Startup}" IsChecked="{Binding StartWithWindows}"/>
-                  <TextBlock Margin="0,16,0,0" Text="{Binding Text.Language}" Style="{StaticResource Caption}"/>
-                  <TextBox Text="{Binding Language, UpdateSourceTrigger=PropertyChanged}" Width="220" HorizontalAlignment="Left"/>
-                  <TextBlock Margin="0,14,0,0" Text="{Binding Text.Api}" Style="{StaticResource Caption}"/>
-                  <TextBox Text="{Binding ApiBaseUrl, UpdateSourceTrigger=PropertyChanged}" Width="420" HorizontalAlignment="Left"/>
-                  <TextBlock Margin="0,14,0,0" Text="{Binding Text.Interval}" Style="{StaticResource Caption}"/>
-                  <TextBox Text="{Binding Interval, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left"/>
-                  <TextBlock Margin="0,16,0,0" Foreground="{StaticResource Muted}" Text="{Binding Text.Privacy}"/>
-                  <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Faint}" Text="{Binding Version}"/>
-                  <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Danger}" Text="{Binding SettingsMessage}"/>
-                  <Button Margin="0,18,0,0" HorizontalAlignment="Left" Content="{Binding Text.Save}" Command="{Binding SaveCommand}"/>
-                </StackPanel>
+                  <Border Style="{StaticResource MetricTile}">
+                    <StackPanel>
+                      <TextBlock Text="GPU" Style="{StaticResource Caption}" Margin="0"/>
+                      <TextBlock Text="{Binding Gpu}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource MetricTile}">
+                    <StackPanel>
+                      <TextBlock Text="Disk" Style="{StaticResource Caption}" Margin="0"/>
+                      <TextBlock Text="{Binding Disk}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource MetricTile}">
+                    <StackPanel>
+                      <TextBlock Text="Network" Style="{StaticResource Caption}" Margin="0"/>
+                      <TextBlock Text="{Binding Network}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                  </Border>
+                </WrapPanel>
+                <Button Margin="0,6,0,0" HorizontalAlignment="Left" Content="{Binding Text.Refresh}" Command="{Binding RefreshCommand}" Style="{StaticResource Ghost}"/>
               </StackPanel>
-            </ScrollViewer>
-          </Border>
-        </Grid>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Settings}">
+                <TextBlock Text="{Binding Text.Preferences}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
+                <TextBlock Text="{Binding Text.Settings}" Style="{StaticResource PageTitle}"/>
+                <TextBlock Text="{Binding Text.PreferencesLead}" Foreground="{StaticResource Muted}" Margin="0,0,0,14"/>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,8"/>
+                <CheckBox Content="{Binding Text.Motion}" IsChecked="{Binding ReduceMotion}"/>
+                <CheckBox Content="{Binding Text.Startup}" IsChecked="{Binding StartWithWindows}"/>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,18,0,12"/>
+                <TextBlock Margin="0,16,0,0" Text="{Binding Text.Language}" Style="{StaticResource Caption}"/>
+                <TextBox Text="{Binding Language, UpdateSourceTrigger=PropertyChanged}" MaxWidth="220" HorizontalAlignment="Stretch"/>
+                <TextBlock Margin="0,14,0,0" Text="{Binding Text.Api}" Style="{StaticResource Caption}"/>
+                <TextBox Text="{Binding ApiBaseUrl, UpdateSourceTrigger=PropertyChanged}" MaxWidth="460" HorizontalAlignment="Stretch"/>
+                <TextBlock Margin="0,14,0,0" Text="{Binding Text.Interval}" Style="{StaticResource Caption}"/>
+                <TextBox Text="{Binding Interval, UpdateSourceTrigger=PropertyChanged}" MaxWidth="140" HorizontalAlignment="Stretch"/>
+                <TextBlock Margin="0,16,0,0" Foreground="{StaticResource Muted}" Text="{Binding Text.Privacy}"/>
+                <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Faint}" Text="{Binding Version}"/>
+                <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Silver}" Text="{Binding SettingsMessage}" TextWrapping="Wrap"/>
+                <Button Margin="0,18,0,0" HorizontalAlignment="Left" Content="{Binding Text.Save}" Command="{Binding SaveCommand}" Style="{StaticResource SecondaryButton}"/>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
       </Grid>
+    </Grid>
+
+    <Grid x:Name="IntroHost" Background="#000000" Panel.ZIndex="8">
+      <StackPanel x:Name="IntroMark" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0">
+        <StackPanel.RenderTransform>
+          <TranslateTransform x:Name="IntroShift" Y="10"/>
+        </StackPanel.RenderTransform>
+        <Image Source="/Assets/nivex-mark.png" Width="190" Height="190" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+          <Image.Effect><BlurEffect x:Name="IntroBlur" Radius="14"/></Image.Effect>
+        </Image>
+        <TextBlock x:Name="IntroWordmark" Text="N I V E X" FontSize="14" FontWeight="Medium"
+                   Foreground="{StaticResource Silver}" HorizontalAlignment="Center" Margin="0,2,0,0" Opacity="0"/>
+        <Border x:Name="IntroShine" Height="1" Width="44" Background="{StaticResource Silver}" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
+      </StackPanel>
     </Grid>
   </Grid>
 </Window>

@@ -44,11 +44,25 @@ public sealed class UiText : Observable
 {
     public string Welcome { get; private set; } = "";
     public string Lead { get; private set; } = "";
+    public string LoginEyebrow { get; private set; } = "";
+    public string Workspace { get; private set; } = "";
+    public string WorkspaceLead { get; private set; } = "";
+    public string Authentication { get; private set; } = "";
+    public string Entitlement { get; private set; } = "";
+    public string Account { get; private set; } = "";
+    public string LocalReadings { get; private set; } = "";
+    public string ReadingsPrivacy { get; private set; } = "";
+    public string Preferences { get; private set; } = "";
+    public string PreferencesLead { get; private set; } = "";
     public string DeviceId { get; private set; } = "";
     public string Activation { get; private set; } = "";
     public string Remember { get; private set; } = "";
     public string Hide { get; private set; } = "";
     public string Login { get; private set; } = "";
+    public string Working { get; private set; } = "";
+    public string Brand { get; private set; } = "";
+    public string IdHint { get; private set; } = "";
+    public string CodeHint { get; private set; } = "";
     public string CreateLink { get; private set; } = "";
     public string Home { get; private set; } = "";
     public string Device { get; private set; } = "";
@@ -66,6 +80,7 @@ public sealed class UiText : Observable
     public string Api { get; private set; } = "";
     public string Interval { get; private set; } = "";
     public string Save { get; private set; } = "";
+    public string Saved { get; private set; } = "";
     public string Unavailable { get; private set; } = "";
     public string Measuring { get; private set; } = "";
     public string Connected { get; private set; } = "";
@@ -86,13 +101,27 @@ public sealed class UiText : Observable
     public void Use(string language)
     {
         var ko = language != "en";
-        Welcome = ko ? "이 PC의 NIVEX" : "NIVEX on this PC";
-        Lead = ko ? "웹에서 만든 장치 ID로 이 설치를 활성화합니다." : "Activate this installation with the Device ID from the website.";
+        Welcome = ko ? "NIVEX에 오신 것을\n환영합니다" : "Welcome to\nNIVEX";
+        Lead = ko ? "등록된 장치 정보로 로그인하세요." : "Sign in with the device registered to this PC.";
+        LoginEyebrow = ko ? "NIVEX  /  장치 인증" : "NIVEX  /  DEVICE AUTHENTICATION";
+        Workspace = ko ? "내 작업 공간" : "YOUR WORKSPACE";
+        WorkspaceLead = ko ? "이 PC의 인증 상태와 이용권, 최근 활동을 확인하세요." : "Your device status, entitlement, and recent activity.";
+        Authentication = ko ? "인증 상태" : "AUTHENTICATION";
+        Entitlement = ko ? "이용 권한" : "ENTITLEMENT";
+        Account = ko ? "계정" : "ACCOUNT";
+        LocalReadings = ko ? "로컬 시스템 정보" : "LOCAL READINGS";
+        ReadingsPrivacy = ko ? "시스템 정보는 이 PC에서만 수집하며 NIVEX로 전송하지 않습니다." : "Readings are collected on this PC and are not sent to NIVEX.";
+        Preferences = ko ? "환경 설정" : "PREFERENCES";
+        PreferencesLead = ko ? "이 PC에서 NIVEX의 모양과 연결 방식을 설정합니다." : "Personalize how NIVEX looks and connects on this PC.";
         DeviceId = ko ? "장치 ID" : "Device ID";
         Activation = ko ? "활성화 코드" : "Activation code";
         Remember = ko ? "이 기기에서 로그인 유지" : "Keep me signed in on this PC";
         Hide = ko ? "입력 숨기기" : "Hide input";
         Login = ko ? "로그인" : "Sign in";
+        Working = ko ? "로그인 중" : "Signing in";
+        Brand = ko ? "장치 ID로 이 PC를 인증합니다." : "Authenticate this PC with a Device ID.";
+        IdHint = "NIV-XXXX-XXXX-XXXX-XXXX";
+        CodeHint = ko ? "웹에서 발급한 코드" : "Code from the website";
         CreateLink = ko ? "장치 ID 만들기" : "Create a Device ID";
         Home = ko ? "홈" : "Home";
         Device = ko ? "장치" : "Device";
@@ -110,6 +139,7 @@ public sealed class UiText : Observable
         Api = ko ? "API 주소" : "API address";
         Interval = ko ? "측정 간격(초)" : "Reading interval (seconds)";
         Save = ko ? "설정 저장" : "Save settings";
+        Saved = ko ? "설정을 저장했습니다." : "Settings saved.";
         Unavailable = ko ? "이용 불가" : "Unavailable";
         Measuring = ko ? "측정 중" : "Measuring";
         Connected = ko ? "연결됨" : "Connected";
@@ -205,7 +235,7 @@ public sealed class AppModel : Observable
     private string _gpu = "";
     private string _disk = "";
     private string _network = "";
-    private string _language = "ko";
+    private string _language = "en";
     private bool _reduceMotion;
     private bool _startWithWindows;
     private string _apiBaseUrl = "";
@@ -214,7 +244,19 @@ public sealed class AppModel : Observable
 
     public bool ShowShell { get => _showShell; private set => Set(ref _showShell, value); }
     public string Section { get => _section; set { if (SetAndReturn(ref _section, value)) WatchIfNeeded(); } }
-    public bool Busy { get => _busy; private set => Set(ref _busy, value); }
+    public bool Busy
+    {
+        get => _busy;
+        private set
+        {
+            if (EqualityComparer<bool>.Default.Equals(_busy, value)) return;
+            _busy = value;
+            Notify(nameof(Busy));
+            Notify(nameof(ShowSpinner));
+            Notify(nameof(LoginLabel));
+        }
+    }
+    public string LoginLabel => Busy ? Text.Working : Text.Login;
     public string LoginDeviceId { get => _loginDeviceId; set => Set(ref _loginDeviceId, value); }
     public string LoginCode { get => _loginCode; set => Set(ref _loginCode, value); }
     public bool Remember { get => _remember; set => Set(ref _remember, value); }
@@ -391,8 +433,7 @@ public sealed class AppModel : Observable
 
     private Task OpenSiteAsync()
     {
-        var baseUrl = _settings.Load().ApiBaseUrl.TrimEnd('/');
-        Process.Start(new ProcessStartInfo(baseUrl + "/device") { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(ProductEndpoints.Site + "/device") { UseShellExecute = true });
         return Task.CompletedTask;
     }
 
@@ -411,22 +452,24 @@ public sealed class AppModel : Observable
             return Task.CompletedTask;
         }
         var settings = _settings.Load();
-        settings.Language = Language == "en" ? "en" : "ko";
+        settings.Language = Language.Trim().Equals("ko", StringComparison.OrdinalIgnoreCase) ? "ko" : "en";
         settings.ReduceMotion = ReduceMotion;
-        settings.ApiBaseUrl = uri.ToString().TrimEnd('/');
+        settings.ApiBaseUrl = ProductEndpoints.NormalizeApi(uri.ToString());
         settings.MetricsIntervalSeconds = Math.Clamp(seconds, 2, 30);
-        if (!_startup.TrySet(StartWithWindows, out _))
+        var savedStartup = _startup.TrySet(StartWithWindows, out _);
+        if (!savedStartup)
         {
             StartWithWindows = _startup.IsEnabled();
             SettingsMessage = Text.Rejected;
         }
-        else SettingsMessage = "";
         settings.StartWithWindows = StartWithWindows;
         _settings.Save(settings);
         Text.Use(settings.Language);
+        SettingsMessage = savedStartup ? Text.Saved : Text.Rejected;
         Interval = settings.MetricsIntervalSeconds.ToString();
         ApiBaseUrl = settings.ApiBaseUrl;
         Raise(nameof(ShowSpinner));
+        Raise(nameof(LoginLabel));
         Raise(nameof(MaskLabel));
         return Task.CompletedTask;
     }
