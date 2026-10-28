@@ -1,5 +1,5 @@
 export const copy = {
-  nav: [["/", "Product"], ["/device", "Device ID"], ["/download", "Download"], ["/releases", "Releases"], ["/support", "Support"]],
+  nav: [["/", "Product"], ["/about", "About"], ["/device", "Device ID"], ["/download", "Download"], ["/releases", "Releases"], ["/support", "Support"]],
   footer: [["/guide", "Sign-in"], ["/privacy", "Privacy"], ["/terms", "Terms"], ["/support", "Support"], ["/admin", "Admin"]],
   rights: "© NIVEX. All rights reserved.",
   homeKicker: "Windows desktop",

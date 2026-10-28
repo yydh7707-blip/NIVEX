@@ -3,6 +3,9 @@ import { mountDevicePage } from "./devicePage.ts";
 import { enterPage } from "./motion.ts";
 import { mountTurnstile } from "./turnstileUi.ts";
 import { api } from "./api.ts";
+import { renderAbout, aboutCopy } from "./about.ts";
+import { getLang } from "./lang.ts";
+import { operator } from "./operator.ts";
 
 interface PublicConfig {
   version: string;
@@ -41,9 +44,13 @@ async function loadConfig(): Promise<void> {
 }
 
 function paintChrome(): void {
-  document.documentElement.lang = "en";
+  const onAbout = location.pathname === "/about";
+  const lang = onAbout ? getLang() : "en";
+  const labels = aboutCopy(lang);
+  document.documentElement.lang = lang;
+  if (!onAbout) document.title = "NIVEX";
   nav.replaceChildren();
-  for (const [href, label] of t().nav) {
+  for (const [href, label] of labels.chromeNav) {
     const link = el("a", undefined, label);
     link.href = href;
     link.dataset.link = "";
@@ -51,13 +58,23 @@ function paintChrome(): void {
     nav.append(link);
   }
   const links = el("nav");
-  for (const [href, label] of t().footer) {
+  for (const [href, label] of labels.chromeFooter) {
     const link = el("a", undefined, label);
     link.href = href;
     link.dataset.link = "";
     links.append(link);
   }
-  footer.replaceChildren(el("span", undefined, t().rights), links);
+  footer.replaceChildren(el("span", undefined, labels.rights), links);
+}
+
+function renderAboutPage(swapped = false): void {
+  renderAbout(view, config, () => {
+    paintChrome();
+    renderAboutPage(true);
+  });
+  if (!swapped) return;
+  view.querySelector<HTMLElement>(".about")?.classList.add("lang-swap");
+  view.querySelector<HTMLButtonElement>('.lang-option[aria-pressed="true"]')?.focus({ preventScroll: true });
 }
 
 function section(title: string): HTMLElement {
@@ -139,7 +156,7 @@ function renderReleases(): void {
 function renderPrivacy(): void {
   const block = section(t().privacyTitle);
   const lines = [
-    "Collected: Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, authentication events, and a hashed IP used only for rate limits.",
+    "Collected: Device ID, hashes of the activation and recovery codes, the installation public key, a random installation ID, refresh-token hashes, authentication events, and a hashed IP used only for rate limits and the three-Device-IDs-per-IP limit. The hashed IP record behind that limit is kept after a device is deleted so the limit cannot be reset.",
     "Not collected: a password, an email for the device user, card numbers, MAC addresses, hardware serial numbers, or the raw IP address.",
     "Purpose: authentication, session continuity, revocation, abuse prevention, and later entitlement checks.",
     "Retention: refresh tokens last until expiry or revocation, authentication events for 180 days, abuse events for 30 days, and idempotency responses for 24 hours. A daily job deletes expired rows.",
@@ -170,8 +187,8 @@ function renderDevice(): void {
 function renderSupport(): void {
   const block = section(t().supportTitle);
   block.append(el("p", undefined, t().supportLede));
-  const mail = el("a", undefined, t().supportMail);
-  mail.href = "mailto:support@example.com";
+  const mail = el("a", undefined, operator.supportEmail || t().supportMail);
+  mail.href = `mailto:${operator.supportEmail || "support@example.com"}`;
   block.append(mail);
   block.append(el("h3", undefined, t().recoverTitle), el("p", undefined, t().recoverLede));
   block.append(ownerForm("device_recover", "/api/v1/devices/recover", t().recoverAction));
@@ -302,6 +319,7 @@ function renderAdmin(): void {
 
 const pages: Record<string, () => void> = {
   "/": renderHome,
+  "/about": () => renderAboutPage(),
   "/download": renderDownload,
   "/device": renderDevice,
   "/guide": renderGuide,
