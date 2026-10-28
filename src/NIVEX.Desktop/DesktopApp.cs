@@ -180,11 +180,9 @@ public sealed class AppModel : Observable
     private readonly SessionService _sessions;
     private readonly IApiClient _api;
     private readonly ISettingsStore _settings;
-    private readonly ISystemMetrics _metrics;
     private readonly IStartupRegistration _startup;
     private readonly IAppLog _log;
     private readonly Dispatcher _dispatcher;
-    private int _watch;
     private CancellationTokenSource _lifetime = new();
 
     public AppModel(SessionService sessions, IApiClient api, ISettingsStore settings, ISystemMetrics metrics, IStartupRegistration startup, IAppLog log, Dispatcher dispatcher)
@@ -192,16 +190,30 @@ public sealed class AppModel : Observable
         _sessions = sessions;
         _api = api;
         _settings = settings;
-        _metrics = metrics;
         _startup = startup;
         _log = log;
         _dispatcher = dispatcher;
         var stored = settings.Load();
         Text.Use(stored.Language);
+        ToolText.Instance.Use(stored.Language);
         _language = stored.Language == "ko" ? "ko" : "en";
         ReduceMotion = stored.ReduceMotion;
         StartWithWindows = startup.IsEnabled();
         Version = typeof(AppModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+        Tools = new ToolkitModel(metrics, dispatcher, section => Section = section, () => settings.Load().MetricsIntervalSeconds, Version);
+        NavItems =
+        [
+            new("Home", "M2,8 L9,2 16,8 16,16 11,16 11,11 7,11 7,16 2,16 Z", () => Text.Home),
+            new("Fix", "M3,15 L10,8 M10,8 A3.5,3.5 0 1 1 14,4 L11.5,6.5 12.5,7.5 15,5 A3.5,3.5 0 0 1 10,8", () => ToolText.Get("navFix")),
+            new("Monitor", "M2,15 L6,10 9,12 14,5 17,7", () => ToolText.Get("navMonitor")),
+            new("Network", "M9,2 A7,7 0 1 0 9,16 A7,7 0 1 0 9,2 M2,9 L16,9 M9,2 C6,5 6,13 9,16 M9,2 C12,5 12,13 9,16", () => ToolText.Get("navNetwork")),
+            new("Flow", "M2,4 L7,4 7,9 12,9 12,14 16,14 M14,12 L16,14 14,16", () => ToolText.Get("navFlow")),
+            new("Profiles", "M3,3 L15,3 15,15 3,15 Z M3,7 L15,7 M7,7 L7,15", () => ToolText.Get("navProfiles")),
+            new("Insight", "M4,1 L14,1 17,4 17,17 4,17 Z M14,1 L14,4 17,4 M7,8 L14,8 M7,11 L14,11 M7,14 L12,14", () => ToolText.Get("navInsight")),
+            new("Device", "M2,4 L16,4 16,12 2,12 Z M6,15 L12,15 M9,12 L9,15", () => Text.Device),
+            new("Settings", "M9,1 L11,1 12,4 14,5 17,4 18,6 16,9 16,11 18,14 17,16 14,15 12,16 11,19 9,19 8,16 6,15 3,16 2,14 4,11 4,9 2,6 3,4 6,5 8,4 Z M10,7 A3,3 0 1 0 10,13 A3,3 0 1 0 10,7", () => Text.Settings),
+        ];
+        NavItems[0].IsSelected = true;
         LoginCommand = new RelayCommand(LoginAsync);
         LogoutCommand = new RelayCommand(LogoutAsync);
         SaveCommand = new RelayCommand(SaveAsync);
@@ -212,6 +224,8 @@ public sealed class AppModel : Observable
     }
 
     public UiText Text { get; } = new();
+    public ToolkitModel Tools { get; }
+    public IReadOnlyList<NavEntry> NavItems { get; }
     public ICommand LoginCommand { get; }
     public ICommand LogoutCommand { get; }
     public ICommand SaveCommand { get; }
@@ -247,7 +261,16 @@ public sealed class AppModel : Observable
     private string _settingsMessage = "";
 
     public bool ShowShell { get => _showShell; private set => Set(ref _showShell, value); }
-    public string Section { get => _section; set { if (SetAndReturn(ref _section, value)) WatchIfNeeded(); } }
+    public string Section
+    {
+        get => _section;
+        set
+        {
+            if (!SetAndReturn(ref _section, value)) return;
+            foreach (var entry in NavItems) entry.IsSelected = entry.Section == value;
+            Tools.OnSection(value);
+        }
+    }
     public bool Busy
     {
         get => _busy;
@@ -339,7 +362,8 @@ public sealed class AppModel : Observable
     public void Shutdown()
     {
         _lifetime.Cancel();
-        if (_metrics is IDisposable disposable) disposable.Dispose();
+        Tools.StopAll();
+        Tools.Dispose();
     }
 
     private async Task LoginAsync()
@@ -378,6 +402,7 @@ public sealed class AppModel : Observable
     private async Task LogoutAsync()
     {
         await _sessions.LogoutAsync(_lifetime.Token);
+        Tools.StopAll();
         ShowShell = false;
         _deviceId = "";
         Auth = "";
@@ -420,9 +445,15 @@ public sealed class AppModel : Observable
 
     private async Task ReadMetricsAsync()
     {
-        var snapshot = await Task.Run(_metrics.Read);
+        var sample = await Tools.Service.SampleOnceAsync() ?? Tools.Service.Latest;
+        var snapshot = sample?.Raw;
         await _dispatcher.InvokeAsync(() =>
         {
+            if (snapshot is null)
+            {
+                Cpu = Memory = Gpu = Disk = Network = Text.Unavailable;
+                return;
+            }
             Cpu = snapshot.CpuPending ? Text.Measuring : snapshot.CpuPercent is null ? Text.Unavailable : $"{snapshot.CpuPercent.Value:0}%";
             Memory = snapshot.MemoryTotalBytes is null ? Text.Unavailable : $"{Format(snapshot.MemoryUsedBytes)} / {Format(snapshot.MemoryTotalBytes)}";
             Gpu = snapshot.GpuName is null && !snapshot.GpuAvailable
@@ -470,6 +501,7 @@ public sealed class AppModel : Observable
         settings.StartWithWindows = StartWithWindows;
         _settings.Save(settings);
         Text.Use(settings.Language);
+        UseToolLanguage(settings.Language);
         SettingsMessage = savedStartup ? Text.Saved : Text.Rejected;
         Raise(nameof(ShowSpinner));
         Raise(nameof(LoginLabel));
@@ -483,35 +515,16 @@ public sealed class AppModel : Observable
         settings.Language = _language;
         _settings.Save(settings);
         Text.Use(_language);
+        UseToolLanguage(_language);
         SettingsMessage = Text.Saved;
         Raise(nameof(LoginLabel));
         Raise(nameof(MaskLabel));
     }
 
-    private void WatchIfNeeded()
+    private void UseToolLanguage(string language)
     {
-        if (Section != "Overview")
-        {
-            _watch++;
-            return;
-        }
-        var generation = ++_watch;
-        _ = WatchAsync(generation);
-    }
-
-    private async Task WatchAsync(int generation)
-    {
-        try
-        {
-            await ReadMetricsAsync();
-            var interval = Math.Clamp(_settings.Load().MetricsIntervalSeconds, 2, 30);
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(interval));
-            while (generation == _watch && await timer.WaitForNextTickAsync(_lifetime.Token))
-                await ReadMetricsAsync();
-        }
-        catch (OperationCanceledException)
-        {
-        }
+        ToolText.Instance.Use(language);
+        foreach (var entry in NavItems) entry.Refresh();
     }
 
     private bool SetAndReturn<T>(ref T field, T value, [CallerMemberName] string? property = null)

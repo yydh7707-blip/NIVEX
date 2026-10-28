@@ -15,6 +15,14 @@ public partial class MainWindow : Window
         Model = model;
         InitializeComponent();
         DataContext = model;
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Escape && model.Tools.Confirm.IsOpen)
+            {
+                model.Tools.Confirm.Dismiss();
+                e.Handled = true;
+            }
+        };
         SourceInitialized += (_, _) =>
         {
             var value = 1;
@@ -213,6 +221,8 @@ public partial class MainWindow : Window
         var panel = SectionHost.Children.OfType<FrameworkElement>().FirstOrDefault(c => c.IsVisible)
             ?? SectionHost;
         var items = panel is Panel p ? p.Children.OfType<FrameworkElement>().ToList() : new List<FrameworkElement> { panel };
+        if (items.Count == 1 && items[0] is UserControl { Content: Panel inner })
+            items = inner.Children.OfType<FrameworkElement>().ToList();
         var ease = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 };
         for (var i = 0; i < items.Count; i++)
         {

@@ -1,0 +1,79 @@
+<UserControl x:Class="NIVEX.Desktop.Views.NetworkView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolVis"/>
+    <Style x:Key="Field" TargetType="StackPanel">
+      <Setter Property="Width" Value="210"/>
+      <Setter Property="Margin" Value="0,0,14,12"/>
+    </Style>
+    <DataTemplate x:Key="RowTemplate">
+      <StackPanel Margin="0,0,0,10">
+        <TextBlock Text="{Binding Primary}" FontSize="13"/>
+        <TextBlock Text="{Binding Secondary}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"/>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+  <StackPanel>
+    <TextBlock Text="{Binding Tx[netEyebrow]}" Style="{StaticResource Eyebrow}"/>
+    <TextBlock Text="{Binding Tx[netTitle]}" Style="{StaticResource PageTitle}"/>
+    <TextBlock Text="{Binding Tx[netLead]}" Style="{StaticResource Lead}"/>
+    <Border Style="{StaticResource Rule}"/>
+    <WrapPanel>
+      <Button Content="{Binding Tx[netDiagnose]}" Command="{Binding DiagnoseCommand}" Margin="0,0,10,10"/>
+      <Button Content="{Binding Tx[netFlushRetest]}" Command="{Binding FlushCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
+    </WrapPanel>
+    <WrapPanel Margin="0,8,0,0">
+      <StackPanel Style="{StaticResource Field}">
+        <TextBlock Text="{Binding Tx[netHost]}" Style="{StaticResource Caption}"/>
+        <TextBox Text="{Binding HostName, UpdateSourceTrigger=PropertyChanged}" MaxLength="253"/>
+      </StackPanel>
+      <StackPanel Style="{StaticResource Field}">
+        <TextBlock Text="{Binding Tx[netCount]}" Style="{StaticResource Caption}"/>
+        <TextBox Text="{Binding Count, UpdateSourceTrigger=PropertyChanged}" MaxLength="2"/>
+      </StackPanel>
+      <StackPanel Style="{StaticResource Field}">
+        <TextBlock Text="{Binding Tx[netTimeout]}" Style="{StaticResource Caption}"/>
+        <TextBox Text="{Binding Timeout, UpdateSourceTrigger=PropertyChanged}" MaxLength="4"/>
+      </StackPanel>
+    </WrapPanel>
+    <Button Content="{Binding Tx[netPing]}" Command="{Binding PingCommand}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,0,0,16"/>
+    <WrapPanel>
+      <StackPanel Style="{StaticResource Field}" Width="300">
+        <TextBlock Text="{Binding Tx[netDomain]}" Style="{StaticResource Caption}"/>
+        <TextBox Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}" MaxLength="253"/>
+      </StackPanel>
+    </WrapPanel>
+    <Button Content="{Binding Tx[netDns]}" Command="{Binding DnsCommand}" Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,0,0,18"/>
+    <TextBlock Text="{Binding Message}" Margin="0,0,0,12">
+      <TextBlock.Style>
+        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+          <Setter Property="Foreground" Value="{StaticResource Silver}"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding IsError}" Value="True">
+              <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </TextBlock.Style>
+    </TextBlock>
+    <ItemsControl ItemsSource="{Binding Results}" ItemTemplate="{StaticResource RowTemplate}"/>
+    <StackPanel Visibility="{Binding HasIssues, Converter={StaticResource BoolVis}}" Margin="0,8,0,0">
+      <Border Style="{StaticResource Rule}" Margin="0,0,0,12"/>
+      <TextBlock Text="{Binding Tx[netIssues]}" Style="{StaticResource Caption}"/>
+      <ItemsControl ItemsSource="{Binding Issues}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Primary}" Foreground="{StaticResource Danger}" Margin="0,0,0,6"/>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button Content="{Binding Tx[netOpenFix]}" Command="{Binding OpenFixCommand}" Style="{StaticResource Ghost}" HorizontalAlignment="Left" Margin="0,6,0,0"/>
+    </StackPanel>
+    <StackPanel Visibility="{Binding HasCompare, Converter={StaticResource BoolVis}}" Margin="0,16,0,0">
+      <Border Style="{StaticResource Rule}" Margin="0,0,0,12"/>
+      <TextBlock Text="{Binding Tx[netCompare]}" Style="{StaticResource Caption}"/>
+      <ItemsControl ItemsSource="{Binding Compare}" ItemTemplate="{StaticResource RowTemplate}"/>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

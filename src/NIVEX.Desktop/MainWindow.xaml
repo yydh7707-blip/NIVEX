@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:NIVEX.Desktop"
+        xmlns:views="clr-namespace:NIVEX.Desktop.Views"
         Title="NIVEX" Icon="/Assets/nivex-mark.png" Width="1180" Height="760" MinWidth="760" MinHeight="600" Opacity="0"
         WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display" SizeChanged="Window_SizeChanged">
@@ -155,66 +156,29 @@
               </StackPanel>
             </StackPanel>
             <Border Height="1" Background="{StaticResource Line}" Margin="4,0,4,14"/>
-            <Button Tag="Home" Click="Nav" AutomationProperties.Name="{Binding Text.Home}">
-              <Button.Style>
-                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding Section}" Value="Home">
-                      <Setter Property="Background" Value="#1AFFFFFF"/>
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Button.Style>
-              <StackPanel Orientation="Horizontal">
-                <Path Data="M2,8 L9,2 16,8 16,16 11,16 11,11 7,11 7,16 2,16 Z" Stroke="{StaticResource Silver}" StrokeThickness="1.2" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
-                <TextBlock Text="{Binding Text.Home}" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
-            <Button Tag="Overview" Click="Nav" AutomationProperties.Name="{Binding Text.Overview}">
-              <Button.Style>
-                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding Section}" Value="Overview">
-                      <Setter Property="Background" Value="#1AFFFFFF"/>
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Button.Style>
-              <StackPanel Orientation="Horizontal">
-                <Path Data="M2,15 L6,10 9,12 14,5 17,7" Stroke="{StaticResource Silver}" StrokeThickness="1.3" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
-                <TextBlock Text="{Binding Text.Overview}" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
-            <Button Tag="Device" Click="Nav" AutomationProperties.Name="{Binding Text.Device}">
-              <Button.Style>
-                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding Section}" Value="Device">
-                      <Setter Property="Background" Value="#1AFFFFFF"/>
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Button.Style>
-              <StackPanel Orientation="Horizontal">
-                <Path Data="M4,1 L14,1 17,4 17,17 4,17 Z M14,1 L14,4 17,4 M7,8 L14,8 M7,11 L14,11 M7,14 L12,14" Stroke="{StaticResource Silver}" StrokeThickness="1.1" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
-                <TextBlock Text="{Binding Text.Device}" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
-            <Button Tag="Settings" Click="Nav" AutomationProperties.Name="{Binding Text.Settings}">
-              <Button.Style>
-                <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding Section}" Value="Settings">
-                      <Setter Property="Background" Value="#1AFFFFFF"/>
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Button.Style>
-              <StackPanel Orientation="Horizontal">
-                <Path Data="M9,1 L11,1 12,4 14,5 17,4 18,6 16,9 16,11 18,14 17,16 14,15 12,16 11,19 9,19 8,16 6,15 3,16 2,14 4,11 4,9 2,6 3,4 6,5 8,4 Z M10,7 A3,3 0 1 0 10,13 A3,3 0 1 0 10,7" Stroke="{StaticResource Silver}" StrokeThickness="1.1" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
-                <TextBlock Text="{Binding Text.Settings}" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="520">
+              <ItemsControl ItemsSource="{Binding NavItems}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Tag="{Binding Section}" Click="Nav" AutomationProperties.Name="{Binding Label}">
+                      <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                              <Setter Property="Background" Value="#1AFFFFFF"/>
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Button.Style>
+                      <StackPanel Orientation="Horizontal">
+                        <Path Data="{Binding Icon}" Stroke="{StaticResource Silver}" StrokeThickness="1.2" Fill="Transparent" Width="16" Height="16" Stretch="Uniform" Margin="2,0,13,0"/>
+                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
             <Border Height="1" Background="{StaticResource Line}" Margin="4,10,4,12"/>
             <Button Content="{Binding Text.Logout}" Style="{StaticResource NavItem}" Margin="0,18,0,0" Command="{Binding LogoutCommand}"/>
           </StackPanel>
@@ -242,6 +206,27 @@
                 <TextBlock Text="{Binding Text.Activity}" Style="{StaticResource Caption}"/>
                 <TextBlock Text="{Binding Activity}" FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                 <Border Height="1" Background="{StaticResource Line}" Margin="0,20,0,4"/>
+                <TextBlock Text="{Binding Tools.Overview.Tx[ovEyebrow]}" Style="{StaticResource Caption}" Margin="0,18,0,6"/>
+                <ItemsControl ItemsSource="{Binding Tools.Overview.Rows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Style="{StaticResource RowButton}" Command="{Binding DataContext.Tools.Overview.OpenCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Section}">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Text="{Binding Title}" FontWeight="Medium"/>
+                          <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding Value}" Foreground="{Binding ValueBrush}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                          </StackPanel>
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Border Height="1" Background="{StaticResource Line}" Margin="0,12,0,4"/>
                 <WrapPanel Margin="0,8,0,0">
                   <Button Content="{Binding Text.Summary}" Command="{Binding CopyCommand}" Style="{StaticResource Ghost}" Margin="0,0,10,10"/>
                   <Button Content="{Binding Text.OpenSite}" Command="{Binding OpenCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
@@ -262,43 +247,23 @@
                 <TextBlock Text="{Binding Auth}" FontWeight="Medium"/>
                 <TextBlock Margin="0,5,0,0" Foreground="{StaticResource Muted}" Text="{Binding LastVerified}" TextWrapping="Wrap"/>
               </StackPanel>
-              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Overview}">
-                <TextBlock Text="{Binding Text.LocalReadings}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
-                <TextBlock Text="{Binding Text.Overview}" Style="{StaticResource PageTitle}"/>
-                <TextBlock Text="{Binding Text.ReadingsPrivacy}" Foreground="{StaticResource Muted}" Margin="0,0,0,8"/>
-                <WrapPanel Margin="0,12,0,0">
-                  <Border Style="{StaticResource MetricTile}">
-                    <StackPanel>
-                      <TextBlock Text="CPU" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Cpu}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                  </Border>
-                  <Border Style="{StaticResource MetricTile}">
-                    <StackPanel>
-                      <TextBlock Text="Memory" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Memory}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                  </Border>
-                  <Border Style="{StaticResource MetricTile}">
-                    <StackPanel>
-                      <TextBlock Text="GPU" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Gpu}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                  </Border>
-                  <Border Style="{StaticResource MetricTile}">
-                    <StackPanel>
-                      <TextBlock Text="Disk" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Disk}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                  </Border>
-                  <Border Style="{StaticResource MetricTile}">
-                    <StackPanel>
-                      <TextBlock Text="Network" Style="{StaticResource Caption}" Margin="0"/>
-                      <TextBlock Text="{Binding Network}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                  </Border>
-                </WrapPanel>
-                <Button Margin="0,6,0,0" HorizontalAlignment="Left" Content="{Binding Text.Refresh}" Command="{Binding RefreshCommand}" Style="{StaticResource Ghost}"/>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Fix}">
+                <views:FixView DataContext="{Binding Tools.Fix}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Monitor}">
+                <views:MonitorView DataContext="{Binding Tools.Monitor}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Network}">
+                <views:NetworkView DataContext="{Binding Tools.Network}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Flow}">
+                <views:FlowView DataContext="{Binding Tools.Flow}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Profiles}">
+                <views:ProfilesView DataContext="{Binding Tools.Profiles}"/>
+              </StackPanel>
+              <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Insight}">
+                <views:InsightView DataContext="{Binding Tools.Insight}"/>
               </StackPanel>
               <StackPanel Visibility="{Binding Section, Converter={StaticResource Eq}, ConverterParameter=Settings}">
                 <TextBlock Text="{Binding Text.Preferences}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,12"/>
@@ -324,6 +289,29 @@
           </ScrollViewer>
         </Border>
       </Grid>
+    </Grid>
+
+    <Grid x:Name="ConfirmHost" Panel.ZIndex="6" Background="#CC000000" DataContext="{Binding Tools.Confirm}">
+      <Grid.Style>
+        <Style TargetType="Grid">
+          <Setter Property="Visibility" Value="Collapsed"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding IsOpen}" Value="True">
+              <Setter Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </Grid.Style>
+      <Border Style="{StaticResource SurfaceCard}" MaxWidth="460" Margin="28" Padding="26,24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10"/>
+          <TextBlock Text="{Binding Body}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,22"/>
+          <WrapPanel HorizontalAlignment="Right">
+            <Button Content="{Binding NoText}" Command="{Binding NoCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"/>
+            <Button Content="{Binding YesText}" Command="{Binding YesCommand}"/>
+          </WrapPanel>
+        </StackPanel>
+      </Border>
     </Grid>
 
     <Grid x:Name="IntroHost" Background="#000000" Panel.ZIndex="8">

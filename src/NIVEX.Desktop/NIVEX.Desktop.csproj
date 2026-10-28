@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NIVEX.Application\NIVEX.Application.csproj" />
     <ProjectReference Include="..\NIVEX.Infrastructure\NIVEX.Infrastructure.csproj" />
+    <ProjectReference Include="..\NIVEX.Toolkit\NIVEX.Toolkit.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\nivex-mark.png" />
