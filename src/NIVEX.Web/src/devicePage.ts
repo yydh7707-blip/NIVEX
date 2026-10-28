@@ -122,6 +122,11 @@ function buildCreatePanel(
   const check = el("button", "btn ghost", copy.ipCheck);
   check.type = "button";
 
+  const findIp = el("a", "btn ghost", copy.ipFindButton) as HTMLAnchorElement;
+  findIp.href = "https://2ip.io/";
+  findIp.target = "_blank";
+  findIp.rel = "noopener noreferrer";
+
   let confirmedIp = "";
   const resetConfirmation = () => {
     confirmedIp = "";
@@ -182,6 +187,8 @@ function buildCreatePanel(
     el("h1", undefined, copy.deviceCreateTitle),
     el("p", "lede", copy.deviceCreateLead),
     el("p", "lede", copy.ipHint),
+    el("p", "lede", copy.ipFind),
+    findIp,
     field,
     actions,
     status,

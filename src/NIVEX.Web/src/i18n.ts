@@ -44,6 +44,8 @@ export const copy = {
   ipLabel: "Your IP address",
   ipHint: "Enter the public IP address you are connecting from. Up to 3 Device IDs can be created per IP address.",
   ipPlaceholder: "e.g. 203.0.113.10",
+  ipFind: "Don't know your IP? Open 2ip.io, copy the IP address shown there, and paste it below.",
+  ipFindButton: "Check my IP on 2ip.io",
   ipCheck: "Check IP",
   ipChecking: "Checking IP",
   ipRemaining: "IP confirmed. {remaining} of {limit} Device IDs left for this IP.",
