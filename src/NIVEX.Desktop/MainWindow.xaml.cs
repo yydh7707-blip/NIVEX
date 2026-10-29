@@ -37,6 +37,9 @@ public partial class MainWindow : Window
         ShellHost.Visibility = model.ShowShell ? Visibility.Visible : Visibility.Collapsed;
         Loaded += (_, _) =>
         {
+            var workArea = SystemParameters.WorkArea;
+            Width = Math.Min(Width, Math.Max(MinWidth, workArea.Width - 48));
+            Height = Math.Min(Height, Math.Max(MinHeight, workArea.Height - 48));
             BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220))
             {
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
@@ -113,6 +116,7 @@ public partial class MainWindow : Window
     private void ApplyColumns()
     {
         var stack = ActualWidth < 920;
+        ShellNavColumn.Width = new GridLength(ActualWidth < 1040 ? 176 : 220);
         if (stack)
         {
             Grid.SetColumn(LoginPane, 0);

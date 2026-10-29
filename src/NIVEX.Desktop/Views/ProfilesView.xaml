@@ -38,9 +38,9 @@
     <StackPanel Visibility="{Binding HasEditor, Converter={StaticResource BoolVis}}">
       <Border Style="{StaticResource Rule}"/>
       <TextBlock Text="{Binding Tx[profName]}" Style="{StaticResource Caption}"/>
-      <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="80" Width="420" HorizontalAlignment="Left" Margin="0,0,0,14"/>
+      <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="80" MaxWidth="560" HorizontalAlignment="Stretch" Margin="0,0,0,14"/>
       <TextBlock Text="{Binding Tx[profDesc]}" Style="{StaticResource Caption}"/>
-      <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" MaxLength="300" Width="420" HorizontalAlignment="Left" Margin="0,0,0,18"/>
+      <TextBox Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" MaxLength="300" MaxWidth="560" HorizontalAlignment="Stretch" Margin="0,0,0,18"/>
       <TextBlock Text="{Binding Tx[profItems]}" Style="{StaticResource Caption}"/>
       <ItemsControl ItemsSource="{Binding Rows}" Margin="0,6,0,6">
         <ItemsControl.ItemTemplate>

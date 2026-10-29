@@ -29,7 +29,7 @@
 
     <Style x:Key="SurfaceCard" TargetType="Border">
       <Setter Property="CornerRadius" Value="12"/>
-      <Setter Property="Padding" Value="24"/>
+      <Setter Property="Padding" Value="28"/>
       <Setter Property="Background" Value="{StaticResource Surface}"/>
       <Setter Property="BorderBrush" Value="{StaticResource FrameBorder}"/>
       <Setter Property="BorderThickness" Value="1"/>
@@ -47,12 +47,16 @@
       <Setter Property="FontSize" Value="15"/>
       <Setter Property="UseLayoutRounding" Value="True"/>
     </Style>
+    <Style TargetType="ScrollViewer">
+      <Setter Property="VerticalScrollBarVisibility" Value="Hidden"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Hidden"/>
+    </Style>
     <Style TargetType="TextBlock">
       <Setter Property="TextWrapping" Value="Wrap"/>
       <Setter Property="Foreground" Value="{StaticResource Ink}"/>
     </Style>
     <Style x:Key="PageTitle" TargetType="TextBlock">
-      <Setter Property="FontSize" Value="30"/>
+      <Setter Property="FontSize" Value="32"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="Foreground" Value="#FFFFFF"/>
       <Setter Property="Margin" Value="0,0,0,8"/>
@@ -71,7 +75,7 @@
     </Style>
     <Style x:Key="Lead" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-      <Setter Property="MaxWidth" Value="640"/>
+      <Setter Property="MaxWidth" Value="760"/>
       <Setter Property="HorizontalAlignment" Value="Left"/>
       <Setter Property="Margin" Value="0,0,0,22"/>
     </Style>
@@ -111,7 +115,7 @@
       <Setter Property="SelectionBrush" Value="#3A4652"/>
       <Setter Property="SelectionTextBrush" Value="#FFFFFF"/>
       <Setter Property="FontSize" Value="15"/>
-      <Setter Property="MinHeight" Value="46"/>
+      <Setter Property="MinHeight" Value="48"/>
       <Setter Property="Padding" Value="14,10"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -168,7 +172,7 @@
       <Setter Property="CaretBrush" Value="#FFFFFF"/>
       <Setter Property="SelectionBrush" Value="#3A4652"/>
       <Setter Property="FontSize" Value="15"/>
-      <Setter Property="MinHeight" Value="46"/>
+      <Setter Property="MinHeight" Value="48"/>
       <Setter Property="Padding" Value="14,10"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -223,7 +227,7 @@
       <Setter Property="BorderBrush" Value="#F7F8F9"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="16,0"/>
-      <Setter Property="MinHeight" Value="46"/>
+      <Setter Property="MinHeight" Value="48"/>
       <Setter Property="MinWidth" Value="112"/>
       <Setter Property="FontSize" Value="14"/>
       <Setter Property="FontWeight" Value="Medium"/>
@@ -312,6 +316,7 @@
               </Border.RenderTransform>
               <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                TextElement.Foreground="{TemplateBinding Foreground}"
                                 RecognizesAccessKey="True"/>
               <VisualStateManager.VisualStateGroups>
                 <VisualStateGroup x:Name="CommonStates">
@@ -356,6 +361,7 @@
                     BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
               <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                TextElement.Foreground="{TemplateBinding Foreground}"
                                 RecognizesAccessKey="True"/>
             </Border>
             <ControlTemplate.Triggers>

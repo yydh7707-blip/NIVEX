@@ -9,28 +9,33 @@
     <TextBlock Text="{Binding Tx[fixTitle]}" Style="{StaticResource PageTitle}"/>
     <TextBlock Text="{Binding Tx[fixLead]}" Style="{StaticResource Lead}"/>
     <Border Style="{StaticResource Rule}"/>
-    <WrapPanel Margin="0,0,0,6">
-      <Button Content="{Binding Tx[quickScan]}" Command="{Binding QuickCommand}" Margin="0,0,10,10"/>
-      <Button Content="{Binding Tx[fullScan]}" Command="{Binding FullCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,10,10"/>
-      <Button Content="{Binding Tx[cancel]}" Command="{Binding CancelCommand}" Style="{StaticResource Ghost}" Margin="0,0,10,10"
-              Visibility="{Binding Busy, Converter={StaticResource BoolVis}}"/>
-    </WrapPanel>
-    <TextBlock Text="{Binding AdminText}" Foreground="{StaticResource Faint}" FontSize="12"/>
-    <TextBlock Text="{Binding Tx[adminNote]}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,2,0,14"/>
-    <TextBlock Foreground="{StaticResource Muted}" FontSize="12">
-      <Run Text="{Binding Tx[lastScan], Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding LastScan, Mode=OneWay}"/>
-    </TextBlock>
-    <TextBlock Text="{Binding Summary}" FontSize="15" FontWeight="Medium" Margin="0,6,0,0"/>
-    <TextBlock Text="{Binding Message}" Foreground="{StaticResource Silver}" Margin="0,6,0,0"/>
+    <Border Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+            CornerRadius="10" Padding="20,18" Margin="0,0,0,18">
+      <StackPanel>
+        <WrapPanel Margin="0,0,0,6">
+          <Button Content="{Binding Tx[quickScan]}" Command="{Binding QuickCommand}" MinHeight="50" Margin="0,0,10,10"/>
+          <Button Content="{Binding Tx[fullScan]}" Command="{Binding FullCommand}" Style="{StaticResource SecondaryButton}" MinHeight="50" Margin="0,0,10,10"/>
+          <Button Content="{Binding Tx[cancel]}" Command="{Binding CancelCommand}" Style="{StaticResource Ghost}" MinHeight="50" Margin="0,0,10,10"
+                  Visibility="{Binding Busy, Converter={StaticResource BoolVis}}"/>
+        </WrapPanel>
+        <TextBlock Text="{Binding AdminText}" Foreground="{StaticResource Faint}" FontSize="12"/>
+        <TextBlock Text="{Binding Tx[adminNote]}" Foreground="{StaticResource Faint}" FontSize="12" Margin="0,2,0,12"/>
+        <TextBlock Foreground="{StaticResource Muted}" FontSize="12">
+          <Run Text="{Binding Tx[lastScan], Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding LastScan, Mode=OneWay}"/>
+        </TextBlock>
+        <TextBlock Text="{Binding Summary}" FontSize="16" FontWeight="Medium" Margin="0,8,0,0"/>
+        <TextBlock Text="{Binding Message}" Foreground="{StaticResource Silver}" Margin="0,6,0,0"/>
+      </StackPanel>
+    </Border>
     <ItemsControl ItemsSource="{Binding Rows}" Margin="0,14,0,0">
       <ItemsControl.ItemTemplate>
         <DataTemplate>
-          <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,12">
+          <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,16">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="28"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="180"/>
               </Grid.ColumnDefinitions>
               <TextBlock Text="{Binding Glyph}" Foreground="{Binding StatusBrush}" FontSize="16" FontWeight="SemiBold"/>
               <StackPanel Grid.Column="1" Margin="0,0,16,0">
