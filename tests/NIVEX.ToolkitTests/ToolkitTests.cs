@@ -29,13 +29,13 @@ internal sealed class FakeResolver(Func<string, IReadOnlyList<IPAddress>> reply)
     public Task<IReadOnlyList<IPAddress>> ResolveAsync(string domain, CancellationToken ct) => Task.FromResult(reply(domain));
 }
 
-internal sealed class FakeRunner(int exit = 0) : ICommandRunner
+internal sealed class FakeRunner(int exit = 0, string output = "", string errorOutput = "") : ICommandRunner
 {
     public List<string> Calls = new();
     public Task<CommandOutput> RunAsync(string file, IReadOnlyList<string> args, TimeSpan timeout, Encoding? encoding, CancellationToken ct)
     {
         Calls.Add(file + " " + string.Join(' ', args));
-        return Task.FromResult(new CommandOutput(exit, "", false));
+        return Task.FromResult(new CommandOutput(exit, output, false, errorOutput));
     }
 }
 
@@ -156,11 +156,24 @@ public sealed class FixTests
     }
 
     [Fact]
-    public async Task AdminScanUsesExitCode()
+    public async Task AdminToolExecutionFailureIsNotReportedAsSystemProblem()
     {
         using var dir = new TempDir();
         var results = await Service(dir, new FakeRunner(1), () => true).ScanAsync(true, null, CancellationToken.None);
-        Assert.Equal(CheckStatus.Problem, results.Single(r => r.Id == "sfc").Status);
+        Assert.Equal(CheckStatus.Failed, results.Single(r => r.Id == "sfc").Status);
+        Assert.Contains("code 1", results.Single(r => r.Id == "sfc").Message);
+    }
+
+    [Theory]
+    [InlineData("Windows Resource Protection did not find any integrity violations.", CheckStatus.Healthy)]
+    [InlineData("Windows Resource Protection found integrity violations.", CheckStatus.Problem)]
+    [InlineData("localized output unknown to NIVEX", CheckStatus.Unknown)]
+    public async Task SfcCheckUsesObservedOutputInsteadOfExitCodeAlone(string output, CheckStatus expected)
+    {
+        using var dir = new TempDir();
+        var result = (await Service(dir, new FakeRunner(0, output), () => true)
+            .ScanAsync(true, null, CancellationToken.None)).Single(r => r.Id == "sfc");
+        Assert.Equal(expected, result.Status);
     }
 
     [Fact]
@@ -187,6 +200,21 @@ public sealed class FixTests
         using var dir = new TempDir();
         Assert.Equal(CheckStatus.Repaired, (await Service(dir, new FakeRunner(0)).FlushDnsAsync(CancellationToken.None)).Status);
         Assert.Equal(CheckStatus.RepairFailed, (await Service(dir, new FakeRunner(5)).FlushDnsAsync(CancellationToken.None)).Status);
+    }
+
+    [Fact]
+    public async Task ProcessRunnerDrainsStandardOutputAndError()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var result = await new ProcessRunner().RunAsync(
+            "cmd.exe",
+            ["/d", "/c", "echo stdout & echo stderr 1>&2"],
+            TimeSpan.FromSeconds(5),
+            Encoding.UTF8,
+            CancellationToken.None);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("stdout", result.Output);
+        Assert.Contains("stderr", result.ErrorOutput);
     }
 
     [Fact]
@@ -229,6 +257,61 @@ public sealed class FixTests
         Assert.False(File.Exists(old));
         Assert.True(File.Exists(fresh));
         Assert.True(File.Exists(outside));
+    }
+
+    [Fact]
+    public void TempCleanupSkipsFilesChangedAfterReview()
+    {
+        using var dir = new TempDir();
+        var service = Service(dir);
+        var path = System.IO.Path.Combine(dir.Path, "tmp", "reviewed.tmp");
+        File.WriteAllText(path, "old");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-3));
+        var plan = service.PlanTempCleanup(CancellationToken.None);
+        File.WriteAllText(path, "new contents");
+
+        var result = service.ExecuteTempCleanup(plan, null, CancellationToken.None);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal("new contents", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void TempCleanupSkipsFilesThatNoLongerExist()
+    {
+        using var dir = new TempDir();
+        var service = Service(dir);
+        var path = System.IO.Path.Combine(dir.Path, "tmp", "removed.tmp");
+        File.WriteAllText(path, "old");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-3));
+        var plan = service.PlanTempCleanup(CancellationToken.None);
+        File.Delete(path);
+
+        var result = service.ExecuteTempCleanup(plan, null, CancellationToken.None);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal(0, result.LogicalBytesDeleted);
+    }
+
+    [Fact]
+    public void TempCleanupRejectsPlanForDifferentRoot()
+    {
+        using var dir = new TempDir();
+        var service = Service(dir);
+        var outside = System.IO.Path.Combine(dir.Path, "outside");
+        Directory.CreateDirectory(outside);
+        var path = System.IO.Path.Combine(outside, "old.tmp");
+        File.WriteAllText(path, "old");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-3));
+        var forged = new TempPlan(outside, [new TempFileEntry(path, new FileInfo(path).Length, File.GetLastWriteTimeUtc(path))]);
+
+        var result = service.ExecuteTempCleanup(forged, null, CancellationToken.None);
+
+        Assert.Equal(0, result.Deleted);
+        Assert.Equal(1, result.Skipped);
+        Assert.True(File.Exists(path));
     }
 
     [Fact]

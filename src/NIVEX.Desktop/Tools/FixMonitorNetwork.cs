@@ -43,7 +43,14 @@ public sealed class FixRow(string id) : Observable
         {
             if (_advice is null) return "";
             if (Id is "disk" or "temp" or "dns" or "internet" or "adapter" or "nivex") return ToolText.Get("adv_" + Id);
-            if (Id is "sfc" or "dism") return ToolText.Get(_status == CheckStatus.Unknown ? "adv_admin" : "adv_tool");
+            if (Id is "sfc" or "dism")
+            {
+                if (_status == CheckStatus.Unknown && _message.Contains("administrator rights", StringComparison.OrdinalIgnoreCase))
+                    return ToolText.Get("adv_admin");
+                if (_status == CheckStatus.Unknown && _message.Contains("output did not confirm", StringComparison.OrdinalIgnoreCase))
+                    return ToolText.Get("adv_output");
+                return ToolText.Get("adv_tool");
+            }
             return _advice;
         }
     }
@@ -101,12 +108,14 @@ public sealed class FixVm : ToolVm
     public FixExtrasVm Extras { get; }
     public ICommand RunAllCommand { get; }
     public ObservableCollection<FindingRow> Findings { get; } = new();
+    public ObservableCollection<InfoRow> RecurringIssues { get; } = new();
     public ObservableCollection<InfoRow> Errors { get; } = new();
     public ObservableCollection<InfoRow> Large { get; } = new();
     public ICommand ExportCommand { get; }
     public ICommand ErrorsCommand { get; }
     public ICommand LargeCommand { get; }
     public bool HasFindings => Findings.Count > 0;
+    public bool HasRecurringIssues => RecurringIssues.Count > 0;
     public string Compare { get => _compare; private set { Set(ref _compare, value); Notify(nameof(HasCompare)); } }
     public bool HasCompare => _compare.Length > 0;
     public string DiagNote { get => _diagNote; private set => Set(ref _diagNote, value); }
@@ -162,6 +171,7 @@ public sealed class FixVm : ToolVm
             _last = results.ToList();
             Compare = "";
             RebuildFindings();
+            RebuildRecurringIssues(results);
             _lastScan = Fmt.Time(DateTimeOffset.Now);
             Notify(nameof(LastScan));
             _host.AddHistory(new HistoryRecord
@@ -220,7 +230,11 @@ public sealed class FixVm : ToolVm
             foreach (var row in rows)
             {
                 var ok = await RepairOneAsync(row, token);
-                if (ok == false) { Message = ToolText.Get("workspaceStopped"); break; }
+                if (ok is not true)
+                {
+                    if (ok == false) Message = ToolText.Get("workspaceStopped");
+                    break;
+                }
             }
         }
         finally
@@ -236,26 +250,36 @@ public sealed class FixVm : ToolVm
         var ids = row.RepairId == "flush-dns" ? new[] { row.Id } : new[] { "disk", "temp" };
         var before = ids.Select(id => _last.FirstOrDefault(r => r.Id == id)).OfType<CheckResult>().ToList();
         bool? ok = null;
-        long freed = 0;
-        if (row.RepairId == "flush-dns") ok = await FlushDnsAsync(row, token);
-        else if (row.RepairId == "clean-temp") (ok, freed) = await CleanTempAsync(token);
+        try
+        {
+            if (row.RepairId == "flush-dns") ok = await FlushDnsAsync(row, token);
+            else if (row.RepairId == "clean-temp") ok = await CleanTempAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            Message = ToolText.Get("repairCancelled");
+            await VerifyAsync(before, false, CancellationToken.None, true);
+            return false;
+        }
         if (ok is null) return null;
-        await VerifyAsync(before, ok.Value, freed, token);
+        await VerifyAsync(before, ok.Value, token.IsCancellationRequested ? CancellationToken.None : token, token.IsCancellationRequested);
         return ok;
     }
 
-    private async Task VerifyAsync(IReadOnlyList<CheckResult> before, bool repairOk, long freed, CancellationToken token)
+    private async Task VerifyAsync(IReadOnlyList<CheckResult> before, bool repairOk, CancellationToken token, bool cancelled = false)
     {
         var lines = new List<string>();
+        var comparisons = new List<CheckComparison>();
         foreach (var old in before)
         {
             var after = await _fix.RecheckAsync(old.Id, token);
             Rows.FirstOrDefault(x => x.Id == old.Id)?.Apply(after);
-            var verdict = BeforeAfter.Compare(old, after, !repairOk);
-            if (old.Id == "disk") verdict = new CheckComparison(verdict.CheckId, verdict.Before, verdict.After, BeforeAfter.WithFreedSpace(verdict.Verdict, freed));
+            var verdict = BeforeAfter.Compare(old, after, !repairOk, cancelled);
+            comparisons.Add(verdict);
             var index = _last.FindIndex(r => r.Id == old.Id);
             if (index >= 0) _last[index] = after;
-            lines.Add($"{ToolText.Get("chk_" + old.Id)}: {ToolText.Get("vd_" + verdict.Verdict.ToString().ToLowerInvariant())} ({old.Message} → {after.Message})");
+            var execution = ToolText.Get("execution_" + verdict.Execution.ToString().ToLowerInvariant());
+            lines.Add($"{ToolText.Get("chk_" + old.Id)}: {ToolText.Get("vd_" + verdict.Verdict.ToString().ToLowerInvariant())} · {execution} ({old.Message} → {after.Message})");
         }
         RebuildFindings();
         Compare = string.Join("\n", lines);
@@ -263,7 +287,7 @@ public sealed class FixVm : ToolVm
         {
             Kind = HistoryKind.Fix,
             Title = ToolText.Get("compareTitle"),
-            Success = lines.Count > 0 && !lines.Any(l => l.Contains(ToolText.Get("vd_unresolved")) || l.Contains(ToolText.Get("vd_repairfailed"))),
+            Success = comparisons.Count > 0 && comparisons.All(c => c.Verdict == Verdict.Resolved && c.Execution == RepairExecution.Succeeded),
             Summary = ToolText.Get("compareTitle"),
             Detail = Compare,
         });
@@ -274,6 +298,29 @@ public sealed class FixVm : ToolVm
         Findings.Clear();
         foreach (var finding in RootCauseAnalyzer.Analyze(_last)) Findings.Add(new FindingRow(finding));
         Notify(nameof(HasFindings));
+    }
+
+    private void RebuildRecurringIssues(IReadOnlyList<CheckResult> current)
+    {
+        RecurringIssues.Clear();
+        var unresolved = current.Where(r => r.Status is CheckStatus.Problem or CheckStatus.Failed).ToList();
+        var prior = _host.History.All()
+            .Where(record => record.Kind == HistoryKind.Fix && record.ErrorType is not null)
+            .ToList();
+        foreach (var result in unresolved)
+        {
+            var matches = prior.Where(record => record.ErrorType!
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Contains(result.Id, StringComparer.OrdinalIgnoreCase))
+                .OrderByDescending(record => record.Time)
+                .ToList();
+            if (matches.Count == 0) continue;
+            RecurringIssues.Add(new InfoRow(
+                ToolText.Get("chk_" + result.Id),
+                ToolText.F("recurringDetail", matches.Count + 1, Fmt.Time(matches[0].Time)),
+                true));
+        }
+        Notify(nameof(HasRecurringIssues));
     }
 
     private async Task ExportAsync()
@@ -302,34 +349,68 @@ public sealed class FixVm : ToolVm
 
     private async Task LoadErrorsAsync()
     {
+        Busy = true;
+        _cts = new CancellationTokenSource();
         DiagNote = ToolText.Get("loading");
-        _errors = (await _crash.ReadAsync(15, CancellationToken.None)).ToList();
-        var dumps = await Task.Run(CrashLab.ReadDumps);
-        Errors.Clear();
-        foreach (var e in _errors.Take(30)) Errors.Add(new InfoRow($"{e.Provider} · {e.EventId}", $"{e.Log} · {Fmt.Time(e.Time)}", false));
-        foreach (var d in dumps.Take(5)) Errors.Add(new InfoRow(Path.GetFileName(d.Path), $"{Fmt.Bytes(d.Size)} · {Fmt.Time(d.Created)}", false));
-        DiagNote = ToolText.F("errorsCount", _errors.Count, dumps.Count);
+        try
+        {
+            _errors = (await _crash.ReadAsync(15, _cts.Token)).ToList();
+            var dumps = await Task.Run(CrashLab.ReadDumps, _cts.Token);
+            Errors.Clear();
+            foreach (var e in _errors.Take(30))
+            {
+                var facts = new[] { e.Application, e.ErrorCode, e.Module }.Where(x => !string.IsNullOrWhiteSpace(x));
+                var detail = $"{e.Log} · {Fmt.Time(e.Time)} · {ToolText.F("errorRepeats", e.RepeatCount)}";
+                var factText = string.Join(" · ", facts);
+                if (factText.Length > 0) detail += "\n" + factText;
+                if (!string.IsNullOrWhiteSpace(e.Message)) detail += "\n" + e.Message;
+                Errors.Add(new InfoRow($"{e.Provider} · {e.EventId}", detail, false));
+            }
+            foreach (var d in dumps.Take(5)) Errors.Add(new InfoRow(Path.GetFileName(d.Path), $"{Fmt.Bytes(d.Size)} · {Fmt.Time(d.Created)}", false));
+            DiagNote = ToolText.F("errorsCount", _errors.Count, dumps.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            DiagNote = ToolText.Get("scanCancelled");
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException or TimeoutException)
+        {
+            DiagNote = ToolText.Get("errorsUnavailable");
+        }
+        finally
+        {
+            Busy = false;
+            _cts.Dispose();
+            _cts = null;
+        }
     }
 
     private async Task FindLargeAsync()
     {
         var folder = Dialogs.OpenFolder();
         if (folder is null) return;
+        Busy = true;
         DiagNote = ToolText.Get("loading");
         _cts = new CancellationTokenSource();
         try
         {
-            var scan = await Task.Run(() => LargeFileFinder.Find(folder, 25, 100L * 1048576, _cts.Token), _cts.Token);
+            var progress = new Progress<int>(count => DiagNote = ToolText.F("largeProgress", count));
+            var scan = await Task.Run(() => LargeFileFinder.Find(folder, 25, 100L * 1048576, _cts.Token, progress), _cts.Token);
             Large.Clear();
             foreach (var f in scan.Files) Large.Add(new InfoRow(Path.GetFileName(f.Path), $"{Fmt.Bytes(f.Size)} · {f.Path}", false));
-            DiagNote = ToolText.F("largeCount", scan.Files.Count, scan.Inaccessible);
+            DiagNote = ToolText.F("largeCount", scan.Files.Count, scan.ScannedFiles, scan.Inaccessible);
         }
         catch (OperationCanceledException)
         {
             DiagNote = ToolText.Get("scanCancelled");
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            DiagNote = ToolText.Get("largeFailed");
+        }
         finally
         {
+            Busy = false;
             _cts.Dispose();
             _cts = null;
         }
@@ -353,19 +434,19 @@ public sealed class FixVm : ToolVm
         return result.Status == CheckStatus.Repaired;
     }
 
-    private async Task<(bool?, long)> CleanTempAsync(CancellationToken token)
+    private async Task<bool?> CleanTempAsync(CancellationToken token)
     {
         var plan = await Task.Run(() => _fix.PlanTempCleanup(token), token);
         if (plan.Files.Count == 0)
         {
             Message = ToolText.Get("cleanNothing");
-            return (null, 0);
+            return null;
         }
         var examples = string.Join("\n", plan.Files.Take(6).Select(f => Path.GetFileName(f.Path)));
-        var body = ToolText.F("cleanBody", plan.Files.Count, Fmt.Bytes(plan.TotalBytes), examples);
-        if (!await _host.Confirm.AskAsync(ToolText.Get("cleanTitle"), body)) return (null, 0);
+        var body = ToolText.F("cleanBody", plan.Files.Count, Fmt.Bytes(plan.TotalBytes), examples, plan.InaccessibleDirectories);
+        if (!await _host.Confirm.AskAsync(ToolText.Get("cleanTitle"), body)) return null;
         var result = await Task.Run(() => _fix.ExecuteTempCleanup(plan, null, token), token);
-        Message = ToolText.F("cleanDone", result.Deleted, Fmt.Bytes(result.BytesFreed), result.Skipped);
+        Message = ToolText.F("cleanDone", result.Deleted, Fmt.Bytes(result.LogicalBytesDeleted), result.Skipped);
         _host.AddHistory(new HistoryRecord
         {
             Kind = HistoryKind.Repair,
@@ -374,7 +455,7 @@ public sealed class FixVm : ToolVm
             Summary = Message,
             ErrorType = result.Cancelled ? "cancelled" : null,
         });
-        return (!result.Cancelled, result.BytesFreed);
+        return !result.Cancelled;
     }
 }
 
@@ -390,7 +471,7 @@ public sealed class FindingRow(Finding finding)
     public string Title => ToolText.Get("fnd_" + finding.CheckId);
     public string Certainty => ToolText.Get("cert_" + finding.Certainty.ToString().ToLowerInvariant());
     public string Evidence => finding.Evidence;
-    public string Advice => ToolText.Get("fnd_" + finding.CheckId + "_adv");
+    public string Advice => finding.SuggestedNextStep ?? ToolText.Get("fnd_" + finding.CheckId + "_adv");
     public string Risk => ToolText.Get("risk_" + finding.Risk.ToString().ToLowerInvariant());
     public string Related => finding.RelatedIds.Length == 0 ? "" : string.Join(", ", finding.RelatedIds.Select(id => ToolText.Get("chk_" + id)));
     public bool HasRelated => finding.RelatedIds.Length > 0;

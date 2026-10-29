@@ -3,6 +3,7 @@ using Xunit;
 
 namespace NIVEX.ToolkitTests;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class FixAnalysisTests
 {
     private static CheckResult R(string id, CheckStatus status, string message = "m") => new(id, status, message);
@@ -26,9 +27,32 @@ public sealed class FixAnalysisTests
     }
 
     [Fact]
-    public void HealthyAndUnknownChecksProduceNoFindings()
+    public void FailedCheckIsReportedAsUndeterminedWithSafeNextStep()
     {
-        Assert.Empty(RootCauseAnalyzer.Analyze([R("os", CheckStatus.Healthy), R("sfc", CheckStatus.Unknown), R("dns", CheckStatus.Failed)]));
+        var finding = Assert.Single(RootCauseAnalyzer.Analyze([R("dns", CheckStatus.Failed, "process failed")]));
+        Assert.Equal(Certainty.Undetermined, finding.Certainty);
+        Assert.Equal("process failed", finding.Evidence);
+        Assert.Contains("did not complete", finding.SuggestedNextStep);
+    }
+
+    [Fact]
+    public void HealthyCheckThatBecomesProblemIsNotReportedAsUnverifiable()
+    {
+        var result = BeforeAfter.Compare(R("dns", CheckStatus.Healthy), R("dns", CheckStatus.Problem));
+        Assert.Equal(Verdict.Unresolved, result.Verdict);
+    }
+
+    [Theory]
+    [InlineData("disk", 5L, 6L, Verdict.Improved)]
+    [InlineData("disk", 6L, 5L, Verdict.Unresolved)]
+    [InlineData("temp", 6L, 5L, Verdict.Improved)]
+    [InlineData("temp", 5L, 6L, Verdict.Unresolved)]
+    public void PartialImprovementRequiresMeasuredProgress(string id, long before, long after, Verdict expected)
+    {
+        var comparison = BeforeAfter.Compare(
+            new CheckResult(id, CheckStatus.Problem, "before", Metric: before),
+            new CheckResult(id, CheckStatus.Problem, "after", Metric: after));
+        Assert.Equal(expected, comparison.Verdict);
     }
 
     [Fact]
@@ -52,17 +76,19 @@ public sealed class FixAnalysisTests
     }
 
     [Fact]
-    public void FailedRepairIsReportedAsFailed()
+    public void RepairExecutionAndProblemResolutionAreReportedSeparately()
     {
-        Assert.Equal(Verdict.RepairFailed, BeforeAfter.Compare(R("dns", CheckStatus.Problem), R("dns", CheckStatus.Healthy), true).Verdict);
-    }
+        var fixedDespiteToolError = BeforeAfter.Compare(R("dns", CheckStatus.Problem), R("dns", CheckStatus.Healthy), true);
+        Assert.Equal(Verdict.Resolved, fixedDespiteToolError.Verdict);
+        Assert.Equal(RepairExecution.Failed, fixedDespiteToolError.Execution);
 
-    [Fact]
-    public void FreedSpaceMakesUnresolvedDiskPartialOnly()
-    {
-        Assert.Equal(Verdict.Improved, BeforeAfter.WithFreedSpace(Verdict.Unresolved, 1));
-        Assert.Equal(Verdict.Unresolved, BeforeAfter.WithFreedSpace(Verdict.Unresolved, 0));
-        Assert.Equal(Verdict.Resolved, BeforeAfter.WithFreedSpace(Verdict.Resolved, 5));
+        var stillBroken = BeforeAfter.Compare(R("dns", CheckStatus.Problem), R("dns", CheckStatus.Problem), true);
+        Assert.Equal(Verdict.Unresolved, stillBroken.Verdict);
+        Assert.Equal(RepairExecution.Failed, stillBroken.Execution);
+
+        var cancelled = BeforeAfter.Compare(R("dns", CheckStatus.Problem), R("dns", CheckStatus.Problem), cancelled: true);
+        Assert.Equal(Verdict.Unresolved, cancelled.Verdict);
+        Assert.Equal(RepairExecution.Cancelled, cancelled.Execution);
     }
 
     [Theory]
@@ -77,11 +103,21 @@ public sealed class FixAnalysisTests
     [Fact]
     public void EventXmlIsParsedAndMalformedXmlIsIgnored()
     {
-        const string xml = "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\"><System><Provider Name=\"Application Error\"/><EventID>1000</EventID><TimeCreated SystemTime=\"2025-01-02T03:04:05.000Z\"/></System></Event>";
+        const string xml = "<Event xmlns=\"http://schemas.microsoft.com/win/2004/08/events/event\"><System><Provider Name=\"Application Error\"/><EventID>1000</EventID><TimeCreated SystemTime=\"2025-01-02T03:04:05.000Z\"/></System><EventData><Data Name=\"ApplicationName\">app.exe</Data><Data Name=\"ExceptionCode\">0xc0000005</Data><Data Name=\"FaultingModuleName\">module.dll</Data></EventData></Event>";
         var e = Assert.Single(CrashLab.Parse(xml, "Application"));
         Assert.Equal("Application Error", e.Provider);
         Assert.Equal(1000, e.EventId);
+        Assert.Equal("app.exe", e.Application);
+        Assert.Equal("0xc0000005", e.ErrorCode);
+        Assert.Equal("module.dll", e.Module);
         Assert.Empty(CrashLab.Parse("<broken", "System"));
+    }
+
+    [Fact]
+    public async Task EventLogReadFailureIsNotReportedAsAnEmptyLog()
+    {
+        var lab = new CrashLab(new FakeRunner(5, errorOutput: "access denied"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => lab.ReadAsync(15, CancellationToken.None));
     }
 
     [Fact]
@@ -93,6 +129,7 @@ public sealed class FixAnalysisTests
         File.WriteAllBytes(Path.Combine(dir.Path, "c.bin"), new byte[10]);
         var scan = LargeFileFinder.Find(dir.Path, 5, 1000, CancellationToken.None);
         Assert.Equal(["b.bin", "a.bin"], scan.Files.Select(f => Path.GetFileName(f.Path)).ToArray());
+        Assert.Equal(3, scan.ScannedFiles);
     }
 
     [Fact]

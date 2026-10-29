@@ -10,14 +10,16 @@ public sealed class StartupRow : Observable
 {
     private readonly Func<StartupRow, Task> _toggle;
     private bool _enabled;
+    private readonly bool _stateKnown;
 
-    public StartupRow(StartupEntry entry, bool enabled, bool isProtected, Func<StartupRow, Task> toggle)
+    public StartupRow(StartupEntry entry, bool enabled, bool isProtected, bool stateKnown, Func<StartupRow, Task> toggle)
     {
         Entry = entry;
         _enabled = enabled;
         IsProtected = isProtected;
+        _stateKnown = stateKnown;
         _toggle = toggle;
-        ToggleCommand = new AsyncCommand(_ => _toggle(this), _ => !IsProtected);
+        ToggleCommand = new AsyncCommand(_ => _toggle(this), _ => CanToggle);
     }
 
     public StartupEntry Entry { get; }
@@ -25,8 +27,8 @@ public sealed class StartupRow : Observable
     public ICommand ToggleCommand { get; }
     public string Name => Entry.Name;
     public bool Enabled { get => _enabled; set { Set(ref _enabled, value); Notify(nameof(State)); Notify(nameof(ToggleText)); } }
-    public bool CanToggle => !IsProtected;
-    public string State => IsProtected ? ToolText.Get("stProtected") : ToolText.Get(_enabled ? "stOn" : "stOff");
+    public bool CanToggle => !IsProtected && _stateKnown;
+    public string State => IsProtected ? ToolText.Get("stProtected") : !_stateKnown ? ToolText.Get("stUnknown") : ToolText.Get(_enabled ? "stOn" : "stOff");
     public string ToggleText => ToolText.Get(_enabled ? "disableBtn" : "enableBtn");
     public void Refresh() => Notify(null);
     public string Detail => $"{Entry.Location} · {ToolText.Get(Entry.PathExists ? "pathOk" : "pathMissing")}";
@@ -297,7 +299,10 @@ public sealed class FixExtrasVm : ToolVm
         var entries = await Task.Run(StartupInspector.Read);
         Startup.Clear();
         foreach (var e in entries)
-            Startup.Add(new StartupRow(e, StartupManager.IsEnabled(e.Location, e.Name), StartupManager.IsProtected(e.Name, e.Command), ToggleAsync));
+        {
+            var known = StartupManager.TryGetEnabled(e.Location, e.Name, out var enabled);
+            Startup.Add(new StartupRow(e, enabled, StartupManager.IsProtected(e.Name, e.Command), known, ToggleAsync));
+        }
         Note = ToolText.F("startupCount", entries.Count);
     }
 
@@ -309,7 +314,7 @@ public sealed class FixExtrasVm : ToolVm
         var body = ToolText.F(target ? "startupEnableBody" : "startupDisableBody", row.Name);
         if (!await _host.Confirm.AskAsync(ToolText.Get("startupChangeTitle"), body)) return;
         var before = row.Enabled;
-        var ok = StartupManager.SetEnabled(row.Entry.Location, row.Name, target);
+        var ok = StartupManager.SetEnabled(row.Entry.Location, row.Name, before, target);
         if (ok)
         {
             row.Enabled = target;
@@ -330,8 +335,19 @@ public sealed class FixExtrasVm : ToolVm
     {
         var last = _journal.Load().LastOrDefault();
         if (last is null) { Note = ToolText.Get("undoNone"); return; }
+        if (!StartupManager.TryGetEnabled(last.Location, last.Name, out var current))
+        {
+            Note = ToolText.Get("undoFailed");
+            return;
+        }
+        var target = !last.WasEnabled;
+        if (current != target)
+        {
+            Note = ToolText.Get("undoChanged");
+            return;
+        }
         if (!await _host.Confirm.AskAsync(ToolText.Get("undoTitle"), ToolText.F("undoBody", last.Name, ToolText.Get(last.WasEnabled ? "stOn" : "stOff")))) return;
-        var ok = StartupManager.SetEnabled(last.Location, last.Name, last.WasEnabled);
+        var ok = StartupManager.SetEnabled(last.Location, last.Name, target, last.WasEnabled);
         if (ok)
         {
             _journal.Remove(last);

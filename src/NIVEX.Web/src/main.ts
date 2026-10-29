@@ -24,7 +24,30 @@ const footer = document.querySelector<HTMLElement>(".foot")!;
 const langSlot = document.querySelector<HTMLElement>(".lang-slot")!;
 const skip = document.querySelector<HTMLElement>(".skip")!;
 const INSTALLER_PATH = "/downloads/NIVEX-Setup.exe";
-let config: PublicConfig = { version: "0.3.0", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
+const backgroundMusic = document.createElement("audio");
+backgroundMusic.src = "/audio/Operational_Grace.mp3";
+backgroundMusic.loop = true;
+backgroundMusic.preload = "metadata";
+backgroundMusic.volume = 0.22;
+backgroundMusic.setAttribute("aria-hidden", "true");
+document.body.append(backgroundMusic);
+const MUSIC_PREFERENCE = "nivex.music";
+let musicButton: HTMLButtonElement | null = null;
+function updateMusicButton(): void {
+  if (!musicButton) return;
+  const lang = getLang();
+  const playing = !backgroundMusic.paused;
+  musicButton.textContent = lang === "ko"
+    ? (playing ? "음악 끄기" : "음악 재생")
+    : (playing ? "Music off" : "Play music");
+  musicButton.setAttribute("aria-label", lang === "ko"
+    ? (playing ? "배경 음악 끄기" : "배경 음악 재생")
+    : (playing ? "Turn background music off" : "Play background music"));
+  musicButton.setAttribute("aria-pressed", String(playing));
+}
+backgroundMusic.addEventListener("play", updateMusicButton);
+backgroundMusic.addEventListener("pause", updateMusicButton);
+let config: PublicConfig = { version: "0.3.1", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
 
 function t(): Copy {
   return copy;
@@ -78,6 +101,25 @@ function paintChrome(): void {
 
 function paintLangSwitch(): void {
   const lang = getLang();
+  const music = el("button", "music-toggle");
+  musicButton = music;
+  music.type = "button";
+  music.addEventListener("click", () => {
+    if (backgroundMusic.paused) {
+      void backgroundMusic.play().then(() => {
+        try { localStorage.setItem(MUSIC_PREFERENCE, "on"); } catch { /* Playback remains active for this page session. */ }
+      }).catch(() => {
+        music.textContent = lang === "ko" ? "음악을 재생할 수 없습니다" : "Music unavailable";
+        music.setAttribute("aria-pressed", "false");
+      });
+    } else {
+      backgroundMusic.pause();
+      try { localStorage.setItem(MUSIC_PREFERENCE, "off"); } catch { /* Playback remains paused for this page session. */ }
+    }
+  });
+  updateMusicButton();
+  const controls = el("div", "chrome-controls");
+  controls.append(music);
   const group = el("div", "lang-switch");
   group.setAttribute("role", "group");
   group.setAttribute("aria-label", "한국어 / English");
@@ -96,7 +138,8 @@ function paintLangSwitch(): void {
     });
     group.append(button);
   }
-  langSlot.replaceChildren(group);
+  controls.append(group);
+  langSlot.replaceChildren(controls);
 }
 
 function renderPolicyPage(key: PolicyKey): void {
@@ -191,7 +234,10 @@ function renderGuide(): void {
 
 function renderReleases(): void {
   const block = section(t().releaseTitle);
-  block.append(el("p", "kicker", config.offline ? "0.3.0" : config.version), el("p", undefined, t().releaseBody));
+  block.append(el("p", "kicker", config.offline ? "0.3.1" : config.version), el("p", undefined, t().releaseBody));
+  const updates = el("ul", "list");
+  for (const update of t().releaseUpdates) updates.append(el("li", undefined, update));
+  block.append(updates);
   view.append(block);
 }
 
@@ -392,3 +438,12 @@ document.addEventListener("click", (event) => {
 });
 window.addEventListener("popstate", paint);
 void loadConfig().then(paint);
+try {
+  if (localStorage.getItem(MUSIC_PREFERENCE) === "on") {
+    void backgroundMusic.play().catch(() => {
+      try { localStorage.setItem(MUSIC_PREFERENCE, "off"); } catch { /* Leave music off when browser playback is unavailable. */ }
+    });
+  }
+} catch {
+  // Music stays off until the user starts it.
+}

@@ -87,6 +87,21 @@ a { color: inherit; }
   background: var(--ink);
   content: "";
 }
+.chrome-controls { display: flex; align-items: center; gap: 0.55rem; }
+.music-toggle {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.music-toggle:hover, .music-toggle[aria-pressed="true"] { color: var(--ink); border-color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.04); }
+.music-toggle:focus-visible { outline: 1px solid rgba(255,255,255,0.7); outline-offset: 2px; }
 
 .skip {
   position: absolute;
@@ -467,6 +482,8 @@ a.doc-title:hover { border-bottom-color: var(--ink); }
   .doc-list { grid-template-columns: minmax(0, 1fr); }
   .def-row { grid-template-columns: minmax(0, 1fr); }
   .lang-bar { justify-content: flex-start; }
+  .lang-slot { margin-left: auto; }
+  .chrome-controls { flex-wrap: wrap; justify-content: flex-end; }
 }
 
 a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
@@ -487,6 +504,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
   .frame { padding-inline: 1rem; }
   .nav { gap: 0.4rem 0.8rem; }
   .nav a { font-size: 0.66rem; }
+  .top { gap: 0.55rem; }
+  .lang-slot { width: 100%; margin: 0 0 0.4rem; }
+  .chrome-controls { width: 100%; justify-content: space-between; }
   h1 { font-size: clamp(2.55rem, 13vw, 3.5rem); }
   .cap-list li { grid-template-columns: 2rem 1fr; gap: 0.55rem; }
   .foot { font-size: 0.8rem; }

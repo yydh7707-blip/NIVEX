@@ -3,6 +3,7 @@ using Xunit;
 
 namespace NIVEX.ToolkitTests;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class FixExtrasTests
 {
     [Fact]

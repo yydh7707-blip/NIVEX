@@ -87,6 +87,23 @@
       </ItemsControl>
     </StackPanel>
 
+    <StackPanel Visibility="{Binding HasRecurringIssues, Converter={StaticResource BoolVis}}" Margin="0,26,0,0">
+      <TextBlock Text="{Binding Tx[recurringTitle]}" FontSize="15" FontWeight="Medium"/>
+      <TextBlock Text="{Binding Tx[recurringLead]}" Foreground="{StaticResource Faint}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,6"/>
+      <ItemsControl ItemsSource="{Binding RecurringIssues}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,8">
+              <StackPanel>
+                <TextBlock Text="{Binding Title}" FontWeight="Medium"/>
+                <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+
     <Button Content="{Binding Tx[exportReport]}" Command="{Binding ExportCommand}" Style="{StaticResource SecondaryButton}"
             HorizontalAlignment="Left" Margin="0,18,0,0"/>
     <Button Content="{Binding Tx[runAll]}" Command="{Binding RunAllCommand}" HorizontalAlignment="Left" Margin="0,10,0,0"/>

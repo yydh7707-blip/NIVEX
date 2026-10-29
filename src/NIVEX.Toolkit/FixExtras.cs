@@ -25,37 +25,49 @@ public static class StartupManager
             && path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.Windows), StringComparison.OrdinalIgnoreCase));
 
     public static bool IsEnabled(string location, string name)
+        => TryGetEnabled(location, name, out var enabled) ? enabled : true;
+
+    public static bool TryGetEnabled(string location, string name, out bool enabled)
     {
         try
         {
             using var baseKey = RegistryKey.OpenBaseKey(HiveOf(location), RegistryView.Registry64);
             using var key = baseKey.OpenSubKey(ApprovedKey, false);
-            return key?.GetValue(name) is not byte[] { Length: > 0 } data || (data[0] & 1) == 0;
+            enabled = ReadEnabled(key, name);
+            return true;
         }
         catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
-            return true;
+            enabled = false;
+            return false;
         }
     }
 
     // Uses the same StartupApproved flag as Task Manager, so the Run entry itself is never deleted.
-    public static bool SetEnabled(string location, string name, bool enabled)
+    public static bool SetEnabled(string location, string name, bool enabled) =>
+        TryGetEnabled(location, name, out var current) && SetEnabled(location, name, current, enabled);
+
+    public static bool SetEnabled(string location, string name, bool expected, bool enabled)
     {
         try
         {
             using var baseKey = RegistryKey.OpenBaseKey(HiveOf(location), RegistryView.Registry64);
             using var key = baseKey.CreateSubKey(ApprovedKey, true);
+            if (ReadEnabled(key, name) != expected) return false;
             var data = new byte[12];
             data[0] = enabled ? (byte)2 : (byte)3;
             if (!enabled) BitConverter.GetBytes(DateTime.UtcNow.ToFileTimeUtc()).CopyTo(data, 4);
             key.SetValue(name, data, RegistryValueKind.Binary);
-            return IsEnabled(location, name) == enabled;
+            return ReadEnabled(key, name) == enabled;
         }
         catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
             return false;
         }
     }
+
+    private static bool ReadEnabled(RegistryKey? key, string name) =>
+        key?.GetValue(name) is not byte[] { Length: > 0 } data || (data[0] & 1) == 0;
 }
 
 public sealed class StartupJournal(string path)

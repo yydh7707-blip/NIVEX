@@ -8,14 +8,31 @@ namespace NIVEX.Toolkit;
 public enum Certainty { Confirmed, Possible, Undetermined }
 public enum RiskLevel { Low, Medium, High }
 public enum Verdict { Resolved, Improved, Unresolved, Unverifiable, RepairFailed }
+public enum RepairExecution { Succeeded, Failed, Cancelled }
 
-public sealed record Finding(string CheckId, Certainty Certainty, string Evidence, string[] RelatedIds, string? RepairId, RiskLevel Risk);
-public sealed record CheckComparison(string CheckId, CheckStatus Before, CheckStatus After, Verdict Verdict);
+public sealed record Finding(
+    string CheckId,
+    Certainty Certainty,
+    string Evidence,
+    string[] RelatedIds,
+    string? RepairId,
+    RiskLevel Risk,
+    string? SuggestedNextStep = null);
+public sealed record CheckComparison(string CheckId, CheckStatus Before, CheckStatus After, Verdict Verdict, RepairExecution Execution);
 public sealed record StartupEntry(string Name, string Command, string Location, bool PathExists);
-public sealed record ErrorEvent(DateTimeOffset Time, string Log, string Provider, int EventId);
+public sealed record ErrorEvent(
+    DateTimeOffset Time,
+    string Log,
+    string Provider,
+    int EventId,
+    string? Application = null,
+    string? ErrorCode = null,
+    string? Module = null,
+    string? Message = null,
+    int RepeatCount = 1);
 public sealed record DumpFile(string Path, long Size, DateTimeOffset Created);
 public sealed record LargeFile(string Path, long Size);
-public sealed record LargeFileScan(IReadOnlyList<LargeFile> Files, int Inaccessible);
+public sealed record LargeFileScan(IReadOnlyList<LargeFile> Files, int Inaccessible, long ScannedFiles = 0);
 
 public static class RootCauseAnalyzer
 {
@@ -63,30 +80,44 @@ public static class RootCauseAnalyzer
                     break;
             }
         }
+        foreach (var result in results.Where(r => r.Status == CheckStatus.Failed))
+        {
+            findings.Add(new Finding(
+                result.Id, Certainty.Undetermined, result.Message, [], null, RiskLevel.Low,
+                "The check did not complete successfully. Review its error details and retry only after confirming the system is ready."));
+        }
         return findings.OrderBy(f => f.Certainty).ThenByDescending(f => f.Risk).ToList();
     }
 }
 
 public static class BeforeAfter
 {
-    public static CheckComparison Compare(CheckResult before, CheckResult? after, bool repairFailed = false)
+    public static CheckComparison Compare(CheckResult before, CheckResult? after, bool repairFailed = false, bool cancelled = false)
     {
-        if (repairFailed) return new CheckComparison(before.Id, before.Status, after?.Status ?? CheckStatus.Unknown, Verdict.RepairFailed);
+        var execution = cancelled ? RepairExecution.Cancelled : repairFailed ? RepairExecution.Failed : RepairExecution.Succeeded;
         if (after is null || after.Status is CheckStatus.Unknown or CheckStatus.Failed)
-            return new CheckComparison(before.Id, before.Status, after?.Status ?? CheckStatus.Unknown, Verdict.Unverifiable);
+            return new CheckComparison(before.Id, before.Status, after?.Status ?? CheckStatus.Unknown, Verdict.Unverifiable, execution);
         var verdict = (before.Status, after.Status) switch
         {
             (CheckStatus.Problem, CheckStatus.Healthy) => Verdict.Resolved,
+            (CheckStatus.Problem, CheckStatus.Problem) when ImprovedMetric(before, after) => Verdict.Improved,
             (CheckStatus.Problem, CheckStatus.Problem) => Verdict.Unresolved,
             (CheckStatus.Healthy, CheckStatus.Healthy) => Verdict.Resolved,
+            (CheckStatus.Healthy, CheckStatus.Problem) => Verdict.Unresolved,
             _ => Verdict.Unverifiable,
         };
-        return new CheckComparison(before.Id, before.Status, after.Status, verdict);
+        return new CheckComparison(before.Id, before.Status, after.Status, verdict, execution);
     }
 
-    // Disk free space can improve without leaving the Problem threshold.
-    public static Verdict WithFreedSpace(Verdict verdict, long freedBytes) =>
-        verdict == Verdict.Unresolved && freedBytes > 0 ? Verdict.Improved : verdict;
+    private static bool ImprovedMetric(CheckResult before, CheckResult after) =>
+        before.Metric is { } prior && after.Metric is { } current
+        && (before.Id switch
+        {
+            "disk" => current > prior,
+            "temp" => current < prior,
+            _ => false,
+        });
+
 }
 
 [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -151,14 +182,21 @@ public sealed class CrashLab(ICommandRunner runner)
     public async Task<IReadOnlyList<ErrorEvent>> ReadAsync(int perLog, CancellationToken ct)
     {
         var all = new List<ErrorEvent>();
+        perLog = Math.Clamp(perLog, 1, 100);
         foreach (var (log, query) in new[] { ("Application", ApplicationQuery), ("System", SystemQuery) })
         {
             var output = await runner.RunAsync("wevtutil",
                 ["qe", log, "/q:" + query, "/c:" + perLog, "/rd:true", "/f:xml"], TimeSpan.FromSeconds(30), Encoding.UTF8, ct);
-            if (output.ExitCode != 0 || output.TimedOut) continue;
+            if (output.TimedOut) throw new TimeoutException($"Reading the {log} event log timed out.");
+            if (output.ExitCode != 0)
+                throw new InvalidOperationException($"Reading the {log} event log failed with exit code {output.ExitCode}.");
             all.AddRange(Parse(output.Output, log));
         }
-        return all.OrderByDescending(e => e.Time).ToList();
+        return all
+            .GroupBy(e => (e.Log, e.Provider, e.EventId, e.Application, e.ErrorCode, e.Module))
+            .SelectMany(group => group.OrderByDescending(e => e.Time).Select(e => e with { RepeatCount = group.Count() }))
+            .OrderByDescending(e => e.Time)
+            .ToList();
     }
 
     public static IReadOnlyList<ErrorEvent> Parse(string xml, string log)
@@ -175,7 +213,21 @@ public sealed class CrashLab(ICommandRunner runner)
                 var provider = system.Elements().FirstOrDefault(e => e.Name.LocalName == "Provider")?.Attribute("Name")?.Value ?? "";
                 var stamp = system.Elements().FirstOrDefault(e => e.Name.LocalName == "TimeCreated")?.Attribute("SystemTime")?.Value;
                 if (!int.TryParse(Value("EventID"), out var id) || !DateTimeOffset.TryParse(stamp, out var time)) continue;
-                events.Add(new ErrorEvent(time, log, provider, id));
+                var data = item.Descendants().Where(e => e.Name.LocalName == "Data")
+                    .Select(e => (Name: e.Attribute("Name")?.Value ?? "", Value: Clip(e.Value, 512)))
+                    .Where(e => e.Value.Length > 0)
+                    .ToList();
+                string? Data(params string[] names) =>
+                    data.FirstOrDefault(e => names.Contains(e.Name, StringComparer.OrdinalIgnoreCase)).Value;
+                var message = item.Descendants().FirstOrDefault(e => e.Name.LocalName == "Message")?.Value;
+                if (string.IsNullOrWhiteSpace(message))
+                    message = string.Join("; ", data.Take(4).Select(e => e.Name.Length == 0 ? e.Value : $"{e.Name}: {e.Value}"));
+                events.Add(new ErrorEvent(
+                    time, log, provider, id,
+                    Data("ApplicationName", "AppName"),
+                    Data("ExceptionCode", "BugcheckCode"),
+                    Data("FaultingModuleName", "ModuleName"),
+                    Clip(message ?? "", 1000)));
             }
         }
         catch (System.Xml.XmlException)
@@ -184,6 +236,9 @@ public sealed class CrashLab(ICommandRunner runner)
         }
         return events;
     }
+
+    private static string Clip(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     public static IReadOnlyList<DumpFile> ReadDumps()
     {
@@ -211,10 +266,14 @@ public sealed class CrashLab(ICommandRunner runner)
 
 public static class LargeFileFinder
 {
-    public static LargeFileScan Find(string root, int top, long minBytes, CancellationToken ct)
+    public static LargeFileScan Find(string root, int top, long minBytes, CancellationToken ct, IProgress<int>? progress = null)
     {
-        var files = new List<LargeFile>();
+        if (!Directory.Exists(root)) throw new DirectoryNotFoundException("Selected folder is not available.");
+        if (minBytes < 0) throw new ArgumentOutOfRangeException(nameof(minBytes));
+        top = Math.Clamp(top, 1, 500);
+        var files = new PriorityQueue<LargeFile, long>();
         var denied = 0;
+        long scanned = 0;
         var pending = new Stack<string>();
         pending.Push(root);
         while (pending.Count > 0)
@@ -227,8 +286,15 @@ public static class LargeFileFinder
                     if (!new DirectoryInfo(directory).Attributes.HasFlag(FileAttributes.ReparsePoint)) pending.Push(directory);
                 foreach (var path in Directory.EnumerateFiles(current))
                 {
+                    ct.ThrowIfCancellationRequested();
                     var info = new FileInfo(path);
-                    if (info.Length >= minBytes) files.Add(new LargeFile(path, info.Length));
+                    scanned++;
+                    if (info.Length >= minBytes)
+                    {
+                        files.Enqueue(new LargeFile(path, info.Length), info.Length);
+                        if (files.Count > top) files.Dequeue();
+                    }
+                    if (scanned % 128 == 0) progress?.Report((int)Math.Min(scanned, int.MaxValue));
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -236,7 +302,8 @@ public static class LargeFileFinder
                 denied++;
             }
         }
-        return new LargeFileScan(files.OrderByDescending(f => f.Size).Take(top).ToList(), denied);
+        progress?.Report((int)Math.Min(scanned, int.MaxValue));
+        return new LargeFileScan(files.UnorderedItems.Select(x => x.Element).OrderByDescending(f => f.Size).ToList(), denied, scanned);
     }
 }
 

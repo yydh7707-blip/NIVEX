@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 
@@ -7,14 +8,14 @@ namespace NIVEX.Toolkit;
 
 public enum CheckStatus { Pending, Checking, Healthy, Problem, Unknown, Failed, Repairing, Repaired, RepairFailed }
 
-public sealed record CheckResult(string Id, CheckStatus Status, string Message, string? Advice = null, string? RepairId = null);
-public sealed record CommandOutput(int ExitCode, string Output, bool TimedOut);
-public sealed record TempFileEntry(string Path, long Size);
-public sealed record TempPlan(string Root, IReadOnlyList<TempFileEntry> Files)
+public sealed record CheckResult(string Id, CheckStatus Status, string Message, string? Advice = null, string? RepairId = null, long? Metric = null);
+public sealed record CommandOutput(int ExitCode, string Output, bool TimedOut, string ErrorOutput = "");
+public sealed record TempFileEntry(string Path, long Size, DateTime LastWriteTimeUtc = default);
+public sealed record TempPlan(string Root, IReadOnlyList<TempFileEntry> Files, int InaccessibleDirectories = 0)
 {
     public long TotalBytes => Files.Sum(f => f.Size);
 }
-public sealed record CleanupResult(int Deleted, long BytesFreed, int Skipped, bool Cancelled);
+public sealed record CleanupResult(int Deleted, long LogicalBytesDeleted, int Skipped, bool Cancelled);
 
 public interface ICommandRunner
 {
@@ -32,22 +33,31 @@ public sealed class ProcessRunner : ICommandRunner
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = encoding ?? Encoding.Default,
+            StandardErrorEncoding = encoding ?? Encoding.Default,
         };
         foreach (var arg in args) info.ArgumentList.Add(arg);
         using var process = Process.Start(info) ?? throw new InvalidOperationException("process did not start");
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         linked.CancelAfter(timeout);
-        var output = process.StandardOutput.ReadToEndAsync(linked.Token);
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errorOutput = process.StandardError.ReadToEndAsync();
         try
         {
             await process.WaitForExitAsync(linked.Token);
-            return new CommandOutput(process.ExitCode, await output, false);
+            return new CommandOutput(process.ExitCode, await output, false, await errorOutput);
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(true); } catch (InvalidOperationException) { }
+            try
+            {
+                if (!process.HasExited) process.Kill(true);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or Win32Exception) { }
+            await process.WaitForExitAsync(CancellationToken.None);
+            var stdout = await output;
+            var stderr = await errorOutput;
             if (ct.IsCancellationRequested) throw;
-            return new CommandOutput(-1, "", true);
+            return new CommandOutput(-1, stdout, true, stderr);
         }
     }
 }
@@ -134,8 +144,8 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
         var percent = free.Value * 100.0 / total.Value;
         var text = $"{Gb(free.Value)} free of {Gb(total.Value)} ({percent:0}%)";
         return percent < 10 || free.Value < 10L * 1073741824
-            ? new CheckResult("disk", CheckStatus.Problem, text, "Free up space: run the temporary-file cleanup or remove files you no longer need.", "clean-temp")
-            : new CheckResult("disk", CheckStatus.Healthy, text);
+            ? new CheckResult("disk", CheckStatus.Problem, text, "Free up space: review the temporary-file cleanup plan or remove files you no longer need.", "clean-temp", free.Value)
+            : new CheckResult("disk", CheckStatus.Healthy, text, Metric: free.Value);
     }
 
     private CheckResult CheckTemp(CancellationToken ct)
@@ -144,8 +154,8 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
         if (!Directory.Exists(options.TempRoot)) return new CheckResult("temp", CheckStatus.Unknown, "temp folder not found");
         var text = $"{plan.Files.Count} files older than 24h · {Gb(plan.TotalBytes, 2)} reclaimable";
         return plan.TotalBytes >= 500L * 1048576
-            ? new CheckResult("temp", CheckStatus.Problem, text, "Review the list and clean up temporary files.", "clean-temp")
-            : new CheckResult("temp", CheckStatus.Healthy, text);
+            ? new CheckResult("temp", CheckStatus.Problem, text, "Review the list and clean up temporary files.", "clean-temp", plan.TotalBytes)
+            : new CheckResult("temp", CheckStatus.Healthy, text, Metric: plan.TotalBytes);
     }
 
     private CheckResult CheckNivex()
@@ -212,10 +222,40 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
         if (!options.IsAdministrator())
             return new CheckResult(id, CheckStatus.Unknown, "administrator rights required", "Restart NIVEX as administrator to run this check.");
         var result = await runner.RunAsync(tool, args, TimeSpan.FromMinutes(30), encoding, ct);
-        if (result.TimedOut) return new CheckResult(id, CheckStatus.Failed, "timed out");
-        return result.ExitCode == 0
-            ? new CheckResult(id, CheckStatus.Healthy, $"{tool} finished with exit code 0")
-            : new CheckResult(id, CheckStatus.Problem, $"{tool} finished with exit code {result.ExitCode}", $"Run '{tool}' manually from an administrator prompt for details.");
+        if (result.TimedOut) return new CheckResult(id, CheckStatus.Failed, $"{tool} timed out.");
+        var evidence = ClipOutput(string.Join(Environment.NewLine, result.Output, result.ErrorOutput));
+        if (result.ExitCode != 0)
+            return new CheckResult(id, CheckStatus.Failed,
+                $"{tool} exited with code {result.ExitCode}" + (evidence.Length == 0 ? "." : $": {evidence}"),
+                $"Review the {tool} output and Windows servicing logs before retrying.");
+
+        var normalized = evidence.ToLowerInvariant();
+        if (id == "sfc")
+        {
+            if (normalized.Contains("did not find any integrity violations", StringComparison.Ordinal)
+                || evidence.Contains("무결성 위반을 발견하지 못했습니다", StringComparison.Ordinal))
+                return new CheckResult(id, CheckStatus.Healthy, $"{tool}: {evidence}");
+            if (normalized.Contains("found integrity violations", StringComparison.Ordinal)
+                || evidence.Contains("무결성 위반을 발견했습니다", StringComparison.Ordinal))
+                return new CheckResult(id, CheckStatus.Problem, $"{tool}: {evidence}", "Review the reported integrity violations before choosing a repair.");
+        }
+        else if (id == "dism")
+        {
+            if (normalized.Contains("no component store corruption detected", StringComparison.Ordinal))
+                return new CheckResult(id, CheckStatus.Healthy, $"{tool}: {evidence}");
+            if (normalized.Contains("component store is repairable", StringComparison.Ordinal)
+                || normalized.Contains("component store cannot be repaired", StringComparison.Ordinal))
+                return new CheckResult(id, CheckStatus.Problem, $"{tool}: {evidence}", "Review the DISM result before choosing a repair.");
+        }
+
+        return new CheckResult(id, CheckStatus.Unknown,
+            $"{tool} exited with code 0, but its output did not confirm the system state" + (evidence.Length == 0 ? "." : $": {evidence}"));
+    }
+
+    private static string ClipOutput(string output)
+    {
+        var normalized = output.Replace('\0', ' ').Trim();
+        return normalized.Length <= 400 ? normalized : normalized[..400] + "…";
     }
 
     public static readonly string[] AllIds = [.. FullIds];
@@ -262,8 +302,9 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
     public TempPlan PlanTempCleanup(CancellationToken ct)
     {
         var files = new List<TempFileEntry>();
+        var inaccessible = 0;
         var root = options.TempRoot;
-        if (!Directory.Exists(root)) return new TempPlan(root, files);
+        if (!Directory.Exists(root)) return new TempPlan(root, files, inaccessible);
         var cutoff = DateTime.UtcNow - TempAge;
         var pending = new Stack<string>();
         pending.Push(root);
@@ -279,20 +320,44 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
                 {
                     var info = new FileInfo(path);
                     if (info.Attributes.HasFlag(FileAttributes.ReparsePoint) || info.LastWriteTimeUtc > cutoff) continue;
-                    files.Add(new TempFileEntry(path, info.Length));
+                    files.Add(new TempFileEntry(path, info.Length, info.LastWriteTimeUtc));
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // inaccessible folders are skipped
+                inaccessible++;
             }
         }
-        return new TempPlan(root, files);
+        return new TempPlan(root, files, inaccessible);
     }
 
     public CleanupResult ExecuteTempCleanup(TempPlan plan, IProgress<int>? progress, CancellationToken ct)
     {
-        var root = Path.GetFullPath(plan.Root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string configuredRoot;
+        string requestedRoot;
+        try
+        {
+            configuredRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.TempRoot));
+            requestedRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(plan.Root));
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException)
+        {
+            return new CleanupResult(0, 0, plan.Files.Count, false);
+        }
+        if (!string.Equals(configuredRoot, requestedRoot, StringComparison.OrdinalIgnoreCase))
+            return new CleanupResult(0, 0, plan.Files.Count, false);
+        if (!Directory.Exists(requestedRoot)) return new CleanupResult(0, 0, plan.Files.Count, false);
+        var rootInfo = new DirectoryInfo(requestedRoot);
+        try
+        {
+            if ((rootInfo.Attributes & FileAttributes.ReparsePoint) != 0)
+                return new CleanupResult(0, 0, plan.Files.Count, false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return new CleanupResult(0, 0, plan.Files.Count, false);
+        }
+        var root = rootInfo.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         int deleted = 0, skipped = 0;
         long freed = 0;
         foreach (var entry in plan.Files)
@@ -302,17 +367,43 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
             {
                 var full = Path.GetFullPath(entry.Path);
                 if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) { skipped++; continue; }
+                if (!IsSafeTempPath(rootInfo.FullName, full)) { skipped++; continue; }
+                var current = new FileInfo(full);
+                if (!current.Exists
+                    || current.Length != entry.Size
+                    || current.LastWriteTimeUtc != entry.LastWriteTimeUtc
+                    || current.LastWriteTimeUtc > DateTime.UtcNow - TempAge)
+                {
+                    skipped++;
+                    continue;
+                }
                 File.Delete(full);
+                if (File.Exists(full)) { skipped++; continue; }
                 deleted++;
                 freed += entry.Size;
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 skipped++;
             }
             progress?.Report(deleted + skipped);
         }
         return new CleanupResult(deleted, freed, skipped, false);
+    }
+
+    private static bool IsSafeTempPath(string root, string file)
+    {
+        var relative = Path.GetRelativePath(root, file);
+        if (relative == "." || Path.IsPathRooted(relative) || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return false;
+
+        var current = root;
+        foreach (var part in Path.GetDirectoryName(relative)?.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries) ?? [])
+        {
+            current = Path.Combine(current, part);
+            if (!Directory.Exists(current) || (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return false;
+        }
+        return (File.GetAttributes(file) & FileAttributes.ReparsePoint) == 0;
     }
 
     private static string Gb(long bytes, int digits = 1) => (bytes / 1073741824d).ToString("F" + digits) + " GB";
