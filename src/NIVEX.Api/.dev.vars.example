@@ -12,3 +12,4 @@ ADMIN_SETUP_TOKEN=development-setup-token-change
 EXPECTED_HOSTNAME=localhost
 WEB_ORIGIN=http://127.0.0.1:8787
 DOWNLOAD_URL=
+GEMINI_API_KEY=

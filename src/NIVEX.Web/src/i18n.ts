@@ -77,8 +77,10 @@ export const en = {
   guideTitle: "Sign-in guide",
   guide: ["Pass the security check and create a Device ID.", "Store the activation and recovery codes somewhere private.", "Open NIVEX and enter the Device ID and activation code.", "Later launches restore the session with the key stored on this PC.", "To move PCs, use the recovery code to detach the old installation, then activate again."],
   releaseTitle: "Release notes",
-  releaseBody: "NIVEX Fix 3.0 reliability update · Version 0.3.1",
+  releaseBody: "NIVEX Intelligence Gemini model settings · Version 0.3.3",
   releaseUpdates: [
+    "Settings now lets signed-in users list Gemini models available to the server, test a selected model's structured JSON response, and save a model preference. Gemini API credentials remain server-side. AI Investigator and Repair Chain generation are not included in this release.",
+    "The desktop now uses a light, high-contrast interface. Fix opens to a compact scan overview, with detailed diagnostics and tools available in a separate view.",
     "System file checks distinguish a tool's exit result from a verified diagnosis; unclear output is reported as unverified.",
     "Temporary cleanup rechecks the reviewed file and skips files that changed, disappeared, or fall outside the configured temporary folder.",
     "Repair execution and post-repair verification are reported separately. Disk and cleanup comparisons use measured values.",

@@ -12,7 +12,7 @@
   </Window.Resources>
   <Grid>
     <Grid.Background>
-      <SolidColorBrush Color="#000000"/>
+      <SolidColorBrush Color="#F5F6F7"/>
     </Grid.Background>
 
     <Grid x:Name="LoginHost">
@@ -37,19 +37,19 @@
           </Grid>
         </ScrollViewer>
 
-        <Rectangle x:Name="ColumnRule" Grid.Column="0" Grid.Row="0" Width="1" HorizontalAlignment="Right" Fill="#33C5CCD4" IsHitTestVisible="False"/>
+        <Rectangle x:Name="ColumnRule" Grid.Column="0" Grid.Row="0" Width="1" HorizontalAlignment="Right" Fill="#FFD8DDE1" IsHitTestVisible="False"/>
 
         <ScrollViewer x:Name="LoginPane" Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" Opacity="0">
           <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch" MaxWidth="500" Margin="56,42">
               <TextBlock Text="{Binding Text.LoginEyebrow}" Foreground="{StaticResource Faint}" FontSize="11" FontWeight="Medium" Margin="0,0,0,22"/>
-              <TextBlock Text="{Binding Text.Welcome}" FontSize="34" FontWeight="Medium" Foreground="#FFFFFF" LineHeight="42" Margin="0,0,0,10"/>
+              <TextBlock Text="{Binding Text.Welcome}" FontSize="34" FontWeight="Medium" Foreground="{StaticResource Ink}" LineHeight="42" Margin="0,0,0,10"/>
               <TextBlock Text="{Binding Text.Lead}" Foreground="{StaticResource Muted}" FontSize="15" LineHeight="23" Margin="0,0,0,28"/>
 
               <TextBlock Text="{Binding Text.DeviceId}" Style="{StaticResource Caption}"/>
               <Grid MinHeight="50" Margin="0,0,0,18">
                 <TextBox x:Name="DeviceBox" Text="{Binding LoginDeviceId, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{Binding Text.DeviceId}"/>
-                <TextBlock Text="{Binding Text.IdHint}" IsHitTestVisible="False" Foreground="#66707A" Margin="16,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Text.IdHint}" IsHitTestVisible="False" Foreground="#68737D" Margin="16,0,12,0" VerticalAlignment="Center">
                   <TextBlock.Style>
                     <Style TargetType="TextBlock">
                       <Setter Property="Visibility" Value="Collapsed"/>
@@ -71,7 +71,7 @@
               <TextBlock Text="{Binding Text.Activation}" Style="{StaticResource Caption}"/>
               <Grid MinHeight="50" Margin="0,0,0,4">
                 <TextBox Text="{Binding LoginCode, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{Binding Text.Activation}"/>
-                <TextBlock Text="{Binding Text.CodeHint}" IsHitTestVisible="False" Foreground="#66707A" Margin="16,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Text.CodeHint}" IsHitTestVisible="False" Foreground="#68737D" Margin="16,0,12,0" VerticalAlignment="Center">
                   <TextBlock.Style>
                     <Style TargetType="TextBlock">
                       <Setter Property="Visibility" Value="Collapsed"/>
@@ -88,7 +88,7 @@
               <CheckBox Content="{Binding Text.Remember}" IsChecked="{Binding Remember}"/>
               <CheckBox Content="{Binding Text.Hide}" IsChecked="{Binding HideInput}" Checked="HideChanged" Unchecked="HideChanged"/>
 
-              <Border x:Name="LoginErrorHost" Background="#12FFFFFF" BorderBrush="#4DF0D2CC" BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,14,0,0" MinHeight="36" Visibility="Collapsed">
+              <Border x:Name="LoginErrorHost" Background="#14A33F38" BorderBrush="#55A33F38" BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,14,0,0" MinHeight="36" Visibility="Collapsed">
                 <TextBlock x:Name="LoginErrorText" Text="{Binding LoginError}" Foreground="{StaticResource Danger}" FontSize="13" TextWrapping="Wrap"/>
               </Border>
 
@@ -138,7 +138,7 @@
       </Grid.RowDefinitions>
       <DockPanel Margin="4,0,4,16">
         <Image Source="/Assets/nivex-mark.png" Width="42" Height="42" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center"/>
-        <TextBlock Text="NIVEX" FontSize="15" FontWeight="Medium" Foreground="#FFFFFF" VerticalAlignment="Center" Margin="12,0,0,0"/>
+        <TextBlock Text="NIVEX" FontSize="15" FontWeight="Medium" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="12,0,0,0"/>
         <TextBlock DockPanel.Dock="Right" Text="{Binding Version}" Foreground="{StaticResource Faint}" VerticalAlignment="Center"/>
       </DockPanel>
       <Grid x:Name="DashboardLayout" Grid.Row="1">
@@ -165,7 +165,7 @@
                         <Style TargetType="Button" BasedOn="{StaticResource NavItem}">
                           <Style.Triggers>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                              <Setter Property="Background" Value="#1AFFFFFF"/>
+                              <Setter Property="Background" Value="#FFE4EFF0"/>
                             </DataTrigger>
                           </Style.Triggers>
                         </Style>
@@ -272,6 +272,37 @@
                 <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,8"/>
                 <CheckBox Content="{Binding Text.Motion}" IsChecked="{Binding ReduceMotion}"/>
                 <CheckBox Content="{Binding Text.Startup}" IsChecked="{Binding StartWithWindows}"/>
+                <Border Margin="0,20,0,8" Padding="20" Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Text.AiTitle}" FontSize="20" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,4,0,16" Foreground="{StaticResource Muted}" Text="{Binding Text.AiProvider}"/>
+                    <TextBlock Text="{Binding Text.AiCurrent}" FontWeight="SemiBold"/>
+                    <TextBlock Margin="0,3,0,0" Text="{Binding CurrentGeminiModel}" Foreground="{StaticResource Muted}"/>
+                    <TextBlock Margin="0,12,0,5" Text="{Binding Text.AiAvailable}" Foreground="{StaticResource Muted}"/>
+                    <ComboBox ItemsSource="{Binding GeminiModels}" SelectedValuePath="Id" SelectedValue="{Binding SelectedGeminiModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              MinHeight="42" Padding="10,7" Background="{StaticResource SurfaceBase}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Line}">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Margin="2,4">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Id}" Foreground="{StaticResource Muted}" FontSize="12"/>
+                            <TextBlock Text="{Binding Description}" Foreground="{StaticResource Faint}" FontSize="12" TextTrimming="CharacterEllipsis" MaxHeight="34"/>
+                          </StackPanel>
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Margin="0,8,0,0" Foreground="{StaticResource Faint}" Text="{Binding Text.AiModelIdLabel}"/>
+                    <TextBlock Foreground="{StaticResource Muted}" Text="{Binding SelectedGeminiModelId}"/>
+                    <TextBlock Margin="0,12,0,0" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Text="{Binding Text.AiDescription}"/>
+                    <WrapPanel Margin="0,14,0,0">
+                      <Button Content="{Binding Text.AiRefresh}" Command="{Binding LoadGeminiModelsCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                      <Button Content="{Binding Text.AiTest}" Command="{Binding TestGeminiModelCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                      <Button Content="{Binding Text.AiDefault}" Command="{Binding DefaultGeminiModelCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                      <Button Content="{Binding Text.AiSave}" Command="{Binding SaveGeminiModelCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"/>
+                    </WrapPanel>
+                    <TextBlock Text="{Binding GeminiStatus}" Foreground="{StaticResource Silver}" TextWrapping="Wrap" MinHeight="20"/>
+                  </StackPanel>
+                </Border>
                 <Border Height="1" Background="{StaticResource Line}" Margin="0,18,0,12"/>
                 <TextBlock Margin="0,16,0,12" Text="{Binding Text.Language}" Style="{StaticResource Caption}"/>
                 <WrapPanel>
@@ -314,7 +345,7 @@
       </Border>
     </Grid>
 
-    <Grid x:Name="IntroHost" Background="#000000" Panel.ZIndex="8">
+    <Grid x:Name="IntroHost" Background="#F5F6F7" Panel.ZIndex="8">
       <StackPanel x:Name="IntroMark" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0">
         <StackPanel.RenderTransform>
           <TranslateTransform x:Name="IntroShift" Y="10"/>

@@ -73,6 +73,24 @@ public sealed class UserSettings
     public bool StartWithWindows { get; set; }
     public string ApiBaseUrl { get; set; } = ProductEndpoints.Api;
     public int MetricsIntervalSeconds { get; set; } = 2;
+    public string GeminiModelId { get; set; } = "";
+}
+
+public sealed class GeminiModelInfo
+{
+    public string Id { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Description { get; set; } = "";
+    public int? InputTokenLimit { get; set; }
+    public int? OutputTokenLimit { get; set; }
+    public bool SupportsGenerateContent { get; set; }
+}
+
+public sealed class GeminiModelTestResponse
+{
+    public bool Success { get; set; }
+    public string ModelId { get; set; } = "";
+    public bool StructuredOutput { get; set; }
 }
 
 public sealed record SystemSnapshot(

@@ -31,6 +31,15 @@ public sealed class ApiClient(ISettingsStore settings) : IApiClient
     public Task<ApiResult<DeviceProfile>> MeAsync(string accessToken, CancellationToken cancellationToken) =>
         Send<DeviceProfile>(HttpMethod.Get, "api/v1/devices/me", null, accessToken, cancellationToken);
 
+    public async Task<ApiResult<List<GeminiModelInfo>>> GeminiModelsAsync(string accessToken, CancellationToken cancellationToken)
+    {
+        var result = await Send<GeminiModelsResponse>(HttpMethod.Get, "api/v1/ai/models", null, accessToken, cancellationToken);
+        return new ApiResult<List<GeminiModelInfo>>(result.Ok, result.Status, result.Code, result.Message, result.Value?.Models);
+    }
+
+    public Task<ApiResult<GeminiModelTestResponse>> TestGeminiModelAsync(string modelId, string accessToken, CancellationToken cancellationToken) =>
+        Post<GeminiModelTestResponse>("api/v1/ai/test", new { modelId }, accessToken, cancellationToken);
+
     private Task<ApiResult<T>> Post<T>(string path, object body, string? accessToken, CancellationToken cancellationToken) =>
         Send<T>(HttpMethod.Post, path, body, accessToken, cancellationToken);
 
@@ -63,5 +72,10 @@ public sealed class ApiClient(ISettingsStore settings) : IApiClient
         {
             return null;
         }
+    }
+
+    private sealed class GeminiModelsResponse
+    {
+        public List<GeminiModelInfo> Models { get; set; } = [];
     }
 }

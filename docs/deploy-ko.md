@@ -27,7 +27,10 @@ npx wrangler secret put CODE_PEPPER
 npx wrangler secret put IP_HASH_PEPPER
 npx wrangler secret put TURNSTILE_SECRET
 npx wrangler secret put ADMIN_SETUP_TOKEN
+npx wrangler secret put GEMINI_API_KEY
 ```
+
+`GEMINI_API_KEY`는 NIVEX Worker가 Gemini 모델 목록과 연결 테스트를 서버에서 호출할 때만 사용한다. WPF 앱과 웹 브라우저에는 전달되지 않는다. Gemini 기능을 사용하지 않으면 설정하지 않아도 되며, 설정하지 않은 경우 앱은 AI 미구성 상태를 표시한다. 로컬 개발은 추적되지 않는 `.dev.vars`에만 넣는다. 현재 API는 모델 목록과 연결 테스트만 제공하며 AI Investigator, 진단 설명, Repair Chain 분석 생성은 아직 구현되어 있지 않다.
 
 `wrangler.toml`의 `[vars]`에서 다음을 실제 값으로 수정한다.
 

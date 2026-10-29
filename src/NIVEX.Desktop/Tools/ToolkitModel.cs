@@ -29,8 +29,8 @@ public sealed class ToolkitModel : ToolVm, IDisposable
         var admin = IsAdministrator();
         var required = new List<string>();
         if (Environment.ProcessPath is { } exe) required.Add(exe);
-        var appAssembly = typeof(SessionService).Assembly.Location;
-        if (appAssembly.Length > 0) required.Add(appAssembly);
+        var appAssembly = Path.Combine(AppContext.BaseDirectory, $"{typeof(SessionService).Assembly.GetName().Name}.dll");
+        if (File.Exists(appAssembly)) required.Add(appAssembly);
         var fixService = new FixService(
             new FixOptions(Path.GetTempPath(), AppPaths.Settings, AppPaths.LogFile, required, version, () => admin, FreeBytes, TotalBytes),
             new ProcessRunner(), network);

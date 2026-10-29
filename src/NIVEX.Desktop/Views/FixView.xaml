@@ -4,7 +4,100 @@
   <UserControl.Resources>
     <BooleanToVisibilityConverter x:Key="BoolVis"/>
   </UserControl.Resources>
-  <StackPanel>
+  <Grid Height="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+    <Grid Visibility="{Binding IsOverview, Converter={StaticResource BoolVis}}">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <StackPanel Margin="0,0,0,14">
+        <TextBlock Text="{Binding Tx[fixEyebrow]}" Style="{StaticResource Eyebrow}" Margin="0,0,0,6"/>
+        <TextBlock Text="{Binding Tx[fixTitle]}" Style="{StaticResource PageTitle}" Margin="0,0,0,4"/>
+        <TextBlock Text="{Binding Tx[fixLead]}" Foreground="{StaticResource Muted}" FontSize="13"/>
+      </StackPanel>
+
+      <Border Grid.Row="1" Background="{StaticResource SurfaceRaised}" BorderBrush="{StaticResource Line}"
+              BorderThickness="1" CornerRadius="10" Padding="16,12" Margin="0,0,0,10">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <WrapPanel>
+            <Button Content="{Binding Tx[quickScan]}" Command="{Binding QuickCommand}" MinHeight="42" Margin="0,0,8,6"/>
+            <Button Content="{Binding Tx[fullScan]}" Command="{Binding FullCommand}" Style="{StaticResource SecondaryButton}" MinHeight="42" Margin="0,0,8,6"/>
+            <Button Content="{Binding Tx[cancel]}" Command="{Binding CancelCommand}" Style="{StaticResource Ghost}" MinHeight="42" Margin="0,0,8,6"
+                    Visibility="{Binding Busy, Converter={StaticResource BoolVis}}"/>
+          </WrapPanel>
+          <TextBlock Grid.Column="1" Text="{Binding AdminText}" Foreground="{StaticResource Muted}"
+                     FontSize="12" VerticalAlignment="Center" Margin="12,0,0,6"/>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
+            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis">
+              <Run Text="{Binding Tx[lastScan], Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding LastScan, Mode=OneWay}"/>
+              <Run Text=" · "/><Run Text="{Binding Tx[adminNote], Mode=OneWay}"/>
+            </TextBlock>
+            <TextBlock Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" Margin="0,5,0,0"/>
+            <TextBlock Text="{Binding Message}" Foreground="{StaticResource Silver}" FontSize="12" Margin="0,2,0,0"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <ItemsControl Grid.Row="2" ItemsSource="{Binding Rows}" Margin="0,0,0,8">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" MinHeight="38" Margin="0,0,16,0">
+              <Grid ToolTipService.ShowDuration="30000">
+                <Grid.ToolTip>
+                  <StackPanel MaxWidth="520">
+                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding AdviceText}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </Grid.ToolTip>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="22"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Glyph}" Foreground="{Binding StatusBrush}" FontSize="15" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="Medium" FontSize="13"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="2" Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" FontSize="12"
+                           VerticalAlignment="Center" Margin="8,0"/>
+                <Button Grid.Column="3" Content="{Binding DataContext.Tx[repair], RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        Command="{Binding DataContext.RepairCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}" Style="{StaticResource SecondaryButton}" MinHeight="28" Padding="8,0"
+                        Visibility="{Binding CanRepair, Converter={StaticResource BoolVis}}"/>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <WrapPanel Grid.Row="3" Margin="0,4,0,0">
+        <Button Content="{Binding Tx[exportReport]}" Command="{Binding ExportCommand}" Style="{StaticResource SecondaryButton}"
+                MinHeight="40" Margin="0,0,8,0"/>
+        <Button Content="{Binding Tx[runAll]}" Command="{Binding RunAllCommand}" MinHeight="40" Margin="0,0,8,0"/>
+        <Button Content="{Binding Tx[fixDetails]}" Command="{Binding DetailsCommand}" Style="{StaticResource Ghost}" MinHeight="40"/>
+      </WrapPanel>
+    </Grid>
+
+    <ScrollViewer Visibility="{Binding ShowDetails, Converter={StaticResource BoolVis}}"
+                  VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+    <StackPanel>
+    <Button Content="{Binding Tx[fixBack]}" Command="{Binding OverviewCommand}" Style="{StaticResource Ghost}"
+            HorizontalAlignment="Left" Margin="0,0,0,18"/>
+    <TextBlock Text="{Binding Tx[fixDetailsLead]}" Foreground="{StaticResource Muted}" Margin="0,0,0,18"/>
     <TextBlock Text="{Binding Tx[fixEyebrow]}" Style="{StaticResource Eyebrow}"/>
     <TextBlock Text="{Binding Tx[fixTitle]}" Style="{StaticResource PageTitle}"/>
     <TextBlock Text="{Binding Tx[fixLead]}" Style="{StaticResource Lead}"/>
@@ -264,5 +357,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </StackPanel>
-  </StackPanel>
+    </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

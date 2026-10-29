@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { bytesToBase64, utf8 } from "../../src/NIVEX.Api/src/crypto.ts";
 import { isDeviceId } from "../../src/NIVEX.Api/src/ids.ts";
 import { createHarness, readError, testConfig } from "./harness.ts";
@@ -20,6 +20,79 @@ async function keyPair(): Promise<{ publicKey: string; privateKey: CryptoKey }> 
 }
 
 describe("NIVEX API", () => {
+  it("requires an authenticated session and a server-side Gemini key for model listing", async () => {
+    const api = await createHarness();
+    const unauthenticated = await api.request("/api/v1/ai/models");
+    expect(unauthenticated.status).toBe(401);
+
+    const accessToken = await authenticateDevice(api);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await api.request("/api/v1/ai/models", {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      expect(response.status).toBe(503);
+      expect((await readError(response)).code).toBe("ai_not_configured");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("lists only Gemini models supporting content generation and tests only listed models", async () => {
+    const api = await createHarness({ geminiApiKey: "server-only-test-key" });
+    const accessToken = await authenticateDevice(api);
+    const listedModels = JSON.stringify({
+        models: [
+          { name: "models/gemini-test", baseModelId: "gemini-test", displayName: "Test model", supportedGenerationMethods: ["generateContent"] },
+          { name: "models/embed-test", baseModelId: "embed-test", supportedGenerationMethods: ["embedContent"] },
+        ],
+      });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(listedModels, { status: 200 }))
+      .mockResolvedValueOnce(new Response(listedModels, { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(listedModels, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const headers = { authorization: `Bearer ${accessToken}` };
+      const listed = await api.request("/api/v1/ai/models", { headers });
+      expect(listed.status).toBe(200);
+      expect(await listed.json()).toMatchObject({
+        provider: "Google Gemini",
+        models: [{ id: "gemini-test", displayName: "Test model", supportsGenerateContent: true }],
+      });
+
+      const tested = await api.request("/api/v1/ai/test", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ modelId: "gemini-test" }),
+      });
+      expect(tested.status).toBe(200);
+      const testedBody = await tested.json();
+      expect(testedBody).toEqual({ success: true, modelId: "gemini-test", structuredOutput: true });
+      expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+        headers: { "x-goog-api-key": "server-only-test-key" },
+      });
+      expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/v1beta/models/gemini-test:generateContent");
+      expect(JSON.stringify(testedBody)).not.toContain("server-only-test-key");
+
+      const invalid = await api.request("/api/v1/ai/test", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ modelId: "not-listed" }),
+      });
+      expect(invalid.status).toBe(400);
+      expect((await readError(invalid)).code).toBe("ai_model_unavailable");
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("creates one persisted device and replays the same idempotency key", async () => {
     const api = await createHarness();
     const verification = await api.request("/api/v1/verification/turnstile", {
@@ -466,4 +539,20 @@ async function issueDevice(api: Awaited<ReturnType<typeof createHarness>>): Prom
   });
   expect(response.status).toBe(201);
   return (await response.json()) as { deviceId: string; activationCode: string; recoveryCode: string };
+}
+
+async function authenticateDevice(api: Awaited<ReturnType<typeof createHarness>>): Promise<string> {
+  const created = await issueDevice(api);
+  const pair = await keyPair();
+  const response = await api.request("/api/v1/auth/activate", {
+    method: "POST",
+    body: JSON.stringify({
+      deviceId: created.deviceId,
+      activationCode: created.activationCode,
+      publicKeySpki: pair.publicKey,
+      installationId: crypto.randomUUID(),
+    }),
+  });
+  expect(response.status).toBe(201);
+  return ((await response.json()) as { accessToken: string }).accessToken;
 }

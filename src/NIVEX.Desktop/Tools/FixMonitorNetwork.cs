@@ -85,6 +85,7 @@ public sealed class FixVm : ToolVm
     private List<ErrorEvent> _errors = [];
     private string _compare = "";
     private string _diagNote = "";
+    private bool _isOverview = true;
 
     public FixVm(FixService fix, ToolkitModel host, bool isAdmin, string version = "", string dataDir = "")
     {
@@ -101,6 +102,8 @@ public sealed class FixVm : ToolVm
         FullCommand = new AsyncCommand(_ => ScanAsync(true), _ => !Busy);
         CancelCommand = new AsyncCommand(_ => { _cts?.Cancel(); return Task.CompletedTask; }, _ => Busy);
         RepairCommand = new AsyncCommand(RepairAsync, p => !Busy && p is FixRow { CanRepair: true });
+        DetailsCommand = new RelayCommand(() => { IsOverview = false; return Task.CompletedTask; });
+        OverviewCommand = new RelayCommand(() => { IsOverview = true; return Task.CompletedTask; });
         foreach (var id in FixService.QuickIds) Rows.Add(new FixRow(id));
     }
 
@@ -124,6 +127,19 @@ public sealed class FixVm : ToolVm
     public ICommand FullCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand RepairCommand { get; }
+    public ICommand DetailsCommand { get; }
+    public ICommand OverviewCommand { get; }
+    public bool IsOverview
+    {
+        get => _isOverview;
+        private set
+        {
+            if (_isOverview == value) return;
+            Set(ref _isOverview, value);
+            Notify(nameof(ShowDetails));
+        }
+    }
+    public bool ShowDetails => !IsOverview;
     public bool Busy { get => _busy; private set { Set(ref _busy, value); Notify(nameof(Idle)); } }
     public bool Idle => !_busy;
     public string Summary { get => _summary; private set => Set(ref _summary, value); }

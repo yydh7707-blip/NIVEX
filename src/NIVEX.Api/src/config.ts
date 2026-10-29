@@ -14,6 +14,7 @@ export interface Config {
   accessTokenSeconds: number;
   refreshTokenSeconds: number;
   passwordIterations: number;
+  geminiApiKey: string;
 }
 
 export interface WorkerEnv {
@@ -30,6 +31,7 @@ export interface WorkerEnv {
   ACCESS_TOKEN_SECONDS?: string;
   REFRESH_TOKEN_SECONDS?: string;
   PASSWORD_ITERATIONS?: string;
+  GEMINI_API_KEY?: string;
   AUTH_SIGNING_KEY?: string;
   CODE_PEPPER?: string;
   IP_HASH_PEPPER?: string;
@@ -77,6 +79,7 @@ export function readConfig(env: WorkerEnv): Config {
     accessTokenSeconds: intSetting(env.ACCESS_TOKEN_SECONDS, 600),
     refreshTokenSeconds: intSetting(env.REFRESH_TOKEN_SECONDS, 60 * 60 * 24 * 30),
     passwordIterations: intSetting(env.PASSWORD_ITERATIONS, 120_000),
+    geminiApiKey: env.GEMINI_API_KEY ?? "",
   };
 }
 

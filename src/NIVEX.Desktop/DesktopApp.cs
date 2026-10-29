@@ -1,7 +1,10 @@
 using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using NIVEX.Application;
 using NIVEX.Domain;
 
@@ -16,6 +19,7 @@ public abstract class Observable : INotifyPropertyChanged
         field = value;
         Notify(property);
     }
+
     protected void Notify(string? property) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
     protected void RefreshAll() => Notify(null);
 }
@@ -97,6 +101,16 @@ public sealed class UiText : Observable
     public string VaultReset { get; private set; } = "";
     public string Mask { get; private set; } = "";
     public string Reveal { get; private set; } = "";
+    public string AiTitle { get; private set; } = "";
+    public string AiProvider { get; private set; } = "";
+    public string AiCurrent { get; private set; } = "";
+    public string AiAvailable { get; private set; } = "";
+    public string AiModelIdLabel { get; private set; } = "";
+    public string AiDescription { get; private set; } = "";
+    public string AiRefresh { get; private set; } = "";
+    public string AiTest { get; private set; } = "";
+    public string AiDefault { get; private set; } = "";
+    public string AiSave { get; private set; } = "";
 
     public void Use(string language)
     {
@@ -156,6 +170,18 @@ public sealed class UiText : Observable
         VaultReset = ko ? "이 PC에 저장된 자격 증명을 읽지 못했습니다. 다시 로그인해야 합니다." : "The saved credential on this PC could not be read. Sign in again.";
         Mask = ko ? "ID 가리기" : "Mask ID";
         Reveal = ko ? "ID 표시" : "Show ID";
+        AiTitle = ko ? "NIVEX Intelligence" : "NIVEX Intelligence";
+        AiProvider = ko ? "Google Gemini · 서버 보안 연결" : "Google Gemini · server-side secure connection";
+        AiCurrent = ko ? "현재 저장된 모델" : "Currently saved model";
+        AiAvailable = ko ? "사용 가능한 모델" : "Available models";
+        AiModelIdLabel = ko ? "API 모델 ID" : "API model ID";
+        AiDescription = ko
+            ? "Gemini API에서 실제 제공하는 모델만 표시합니다. 저장 전에 연결 및 JSON 응답 테스트가 필요합니다. API 키는 서버에만 보관됩니다."
+            : "Only models returned by the Gemini API are listed. Test the connection and JSON output before saving. The API key remains on the server.";
+        AiRefresh = ko ? "모델 새로고침" : "Refresh models";
+        AiTest = ko ? "연결 테스트" : "Test connection";
+        AiDefault = ko ? "모델 선택 초기화" : "Clear selection";
+        AiSave = ko ? "모델 저장" : "Save model";
         RefreshAll();
     }
 }
@@ -197,6 +223,8 @@ public sealed class AppModel : Observable
         Text.Use(stored.Language);
         ToolText.Instance.Use(stored.Language);
         _language = stored.Language == "ko" ? "ko" : "en";
+        _selectedGeminiModelId = stored.GeminiModelId;
+        _savedGeminiModelId = stored.GeminiModelId;
         ReduceMotion = stored.ReduceMotion;
         StartWithWindows = startup.IsEnabled();
         Version = typeof(AppModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
@@ -217,6 +245,10 @@ public sealed class AppModel : Observable
         LoginCommand = new RelayCommand(LoginAsync);
         LogoutCommand = new RelayCommand(LogoutAsync);
         SaveCommand = new RelayCommand(SaveAsync);
+        LoadGeminiModelsCommand = new RelayCommand(LoadGeminiModelsAsync);
+        TestGeminiModelCommand = new RelayCommand(TestGeminiModelAsync);
+        SaveGeminiModelCommand = new RelayCommand(SaveGeminiModelAsync);
+        DefaultGeminiModelCommand = new RelayCommand(SelectDefaultGeminiModelAsync);
         RefreshCommand = new RelayCommand(async () => await ReadMetricsAsync());
         CopyCommand = new RelayCommand(CopySummaryAsync);
         OpenCommand = new RelayCommand(OpenSiteAsync);
@@ -229,6 +261,10 @@ public sealed class AppModel : Observable
     public ICommand LoginCommand { get; }
     public ICommand LogoutCommand { get; }
     public ICommand SaveCommand { get; }
+    public ICommand LoadGeminiModelsCommand { get; }
+    public ICommand TestGeminiModelCommand { get; }
+    public ICommand SaveGeminiModelCommand { get; }
+    public ICommand DefaultGeminiModelCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand CopyCommand { get; }
     public ICommand OpenCommand { get; }
@@ -259,6 +295,11 @@ public sealed class AppModel : Observable
     private bool _reduceMotion;
     private bool _startWithWindows;
     private string _settingsMessage = "";
+    private string _selectedGeminiModelId = "";
+    private string _savedGeminiModelId = "";
+    private string _testedGeminiModelId = "";
+    private string _geminiStatus = "";
+    private bool _loadingGeminiModels;
 
     public bool ShowShell { get => _showShell; private set => Set(ref _showShell, value); }
     public string Section
@@ -269,6 +310,7 @@ public sealed class AppModel : Observable
             if (!SetAndReturn(ref _section, value)) return;
             foreach (var entry in NavItems) entry.IsSelected = entry.Section == value;
             Tools.OnSection(value);
+            if (value == "Settings" && ShowShell) LoadGeminiModelsCommand.Execute(null);
         }
     }
     public bool Busy
@@ -318,6 +360,25 @@ public sealed class AppModel : Observable
     public bool ReduceMotion { get => _reduceMotion; set => Set(ref _reduceMotion, value); }
     public bool StartWithWindows { get => _startWithWindows; set => Set(ref _startWithWindows, value); }
     public string SettingsMessage { get => _settingsMessage; private set => Set(ref _settingsMessage, value); }
+    public ObservableCollection<GeminiModelInfo> GeminiModels { get; } = [];
+    public string SelectedGeminiModelId
+    {
+        get => _selectedGeminiModelId;
+        set
+        {
+            if (!SetAndReturn(ref _selectedGeminiModelId, value ?? "")) return;
+            _testedGeminiModelId = "";
+            Notify(nameof(IsGeminiModelTested));
+            Notify(nameof(CurrentGeminiModel));
+            GeminiStatus = "";
+        }
+    }
+    public string CurrentGeminiModel => string.IsNullOrWhiteSpace(_savedGeminiModelId)
+        ? TextForLanguage("선택된 모델 없음", "No model selected")
+        : GeminiModels.FirstOrDefault(model => model.Id == _savedGeminiModelId)?.DisplayName ?? _savedGeminiModelId;
+    public string GeminiStatus { get => _geminiStatus; private set => Set(ref _geminiStatus, value); }
+    public bool IsLoadingGeminiModels { get => _loadingGeminiModels; private set => Set(ref _loadingGeminiModels, value); }
+    public bool IsGeminiModelTested => !string.IsNullOrEmpty(SelectedGeminiModelId) && SelectedGeminiModelId == _testedGeminiModelId;
     public bool ShowSpinner => Busy && !ReduceMotion;
 
     public async Task InitializeAsync()
@@ -509,6 +570,154 @@ public sealed class AppModel : Observable
         return Task.CompletedTask;
     }
 
+    private async Task LoadGeminiModelsAsync()
+    {
+        if (IsLoadingGeminiModels) return;
+        var session = _sessions.ActiveSession();
+        if (session is null)
+        {
+            GeminiStatus = TextForLanguage("모델 목록을 보려면 먼저 로그인하세요.", "Sign in to load available models.");
+            return;
+        }
+        IsLoadingGeminiModels = true;
+        GeminiStatus = TextForLanguage("Gemini 모델을 확인하는 중...", "Checking Gemini models...");
+        try
+        {
+            var result = await _api.GeminiModelsAsync(session.AccessToken, _lifetime.Token);
+            if (!result.Ok || result.Value is null)
+            {
+                GeminiStatus = AiErrorMessage(result.Code);
+                return;
+            }
+            GeminiModels.Clear();
+            foreach (var model in result.Value) GeminiModels.Add(model);
+            Notify(nameof(CurrentGeminiModel));
+            if (GeminiModels.Count == 0)
+                GeminiStatus = TextForLanguage("generateContent를 지원하는 모델을 찾지 못했습니다.", "No generateContent-compatible models were returned.");
+            else if (!string.IsNullOrEmpty(_savedGeminiModelId) && !GeminiModels.Any(model => model.Id == _savedGeminiModelId))
+                GeminiStatus = TextForLanguage("저장된 모델을 사용할 수 없습니다. 기존 설정은 유지됩니다.", "The saved model is unavailable. Your saved setting has been preserved.");
+            else
+                GeminiStatus = TextForLanguage($"{GeminiModels.Count}개 모델을 확인했습니다. 구조화된 출력 호환성은 연결 테스트 후 확인됩니다.", $"{GeminiModels.Count} models found. Structured output compatibility is confirmed by testing.");
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (TaskCanceledException)
+        {
+            GeminiStatus = TextForLanguage("모델 목록 요청 시간이 초과되었습니다.", "The model-list request timed out.");
+        }
+        catch (HttpRequestException)
+        {
+            GeminiStatus = TextForLanguage("서버에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도하세요.", "Could not connect to the server. Check your network and retry.");
+        }
+        catch (JsonException)
+        {
+            GeminiStatus = TextForLanguage("서버 응답을 읽을 수 없습니다. 다시 시도하세요.", "The server response could not be read. Please retry.");
+        }
+        finally
+        {
+            IsLoadingGeminiModels = false;
+        }
+    }
+
+    private async Task TestGeminiModelAsync()
+    {
+        var session = _sessions.ActiveSession();
+        if (session is null)
+        {
+            GeminiStatus = TextForLanguage("먼저 로그인하세요.", "Sign in before testing a model.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(SelectedGeminiModelId))
+        {
+            GeminiStatus = TextForLanguage("연결 테스트할 모델을 선택하세요.", "Select a model to test.");
+            return;
+        }
+        var modelId = SelectedGeminiModelId;
+        GeminiStatus = TextForLanguage("선택한 모델과 JSON 응답을 테스트하는 중...", "Testing the selected model and JSON output...");
+        try
+        {
+            var result = await _api.TestGeminiModelAsync(modelId, session.AccessToken, _lifetime.Token);
+            if (!result.Ok || result.Value is null || !result.Value.Success || !result.Value.StructuredOutput)
+            {
+                _testedGeminiModelId = "";
+                Notify(nameof(IsGeminiModelTested));
+                GeminiStatus = AiErrorMessage(result.Code);
+                return;
+            }
+            if (SelectedGeminiModelId != modelId)
+            {
+                GeminiStatus = TextForLanguage("테스트 중 선택한 모델이 바뀌었습니다. 현재 선택을 다시 테스트하세요.", "The selection changed during testing. Test the currently selected model.");
+                return;
+            }
+            _testedGeminiModelId = result.Value.ModelId;
+            Notify(nameof(IsGeminiModelTested));
+            GeminiStatus = TextForLanguage("연결 성공. 이 모델의 JSON 구조화 응답을 확인했습니다.", "Connection succeeded. Structured JSON output was verified for this model.");
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (TaskCanceledException)
+        {
+            GeminiStatus = TextForLanguage("모델 테스트 시간이 초과되었습니다.", "The model test timed out.");
+        }
+        catch (HttpRequestException)
+        {
+            GeminiStatus = TextForLanguage("서버에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도하세요.", "Could not connect to the server. Check your network and retry.");
+        }
+        catch (JsonException)
+        {
+            GeminiStatus = TextForLanguage("서버 응답을 읽을 수 없습니다. 다시 시도하세요.", "The server response could not be read. Please retry.");
+        }
+    }
+
+    private Task SaveGeminiModelAsync()
+    {
+        if (!string.IsNullOrEmpty(SelectedGeminiModelId) &&
+            (!GeminiModels.Any(model => model.Id == SelectedGeminiModelId) || !IsGeminiModelTested))
+        {
+            GeminiStatus = TextForLanguage("저장 전에 사용 가능한 모델을 선택하고 연결 테스트를 완료하세요.", "Select an available model and complete its connection test before saving.");
+            return Task.CompletedTask;
+        }
+        try
+        {
+            var settings = _settings.Load();
+            settings.GeminiModelId = SelectedGeminiModelId;
+            _settings.Save(settings);
+            _savedGeminiModelId = SelectedGeminiModelId;
+            Notify(nameof(CurrentGeminiModel));
+            GeminiStatus = TextForLanguage("모델 설정을 저장했습니다.", "Model setting saved.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            GeminiStatus = TextForLanguage("설정을 저장하지 못했습니다. 권한과 디스크 상태를 확인하세요.", "Could not save settings. Check permissions and disk status.");
+            _log.Error("gemini_model_save", exception);
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task SelectDefaultGeminiModelAsync()
+    {
+        SelectedGeminiModelId = "";
+        GeminiStatus = TextForLanguage("모델 선택을 초기화했습니다. 저장을 눌러 적용하세요.", "Model selection cleared. Save to apply it.");
+        return Task.CompletedTask;
+    }
+
+    private string AiErrorMessage(string code) => code switch
+    {
+        "ai_not_configured" => TextForLanguage("Gemini가 서버에 아직 설정되지 않았습니다. 운영자 설정이 필요합니다.", "Gemini is not configured on the server yet. Operator setup is required."),
+        "ai_provider_auth_error" => TextForLanguage("Gemini 서버 인증에 실패했습니다. 운영자에게 문의하세요.", "Gemini server authentication failed. Contact the operator."),
+        "ai_model_unavailable" => TextForLanguage("선택한 모델을 사용할 수 없습니다. 목록을 새로고침하세요.", "The selected model is unavailable. Refresh the list."),
+        "invalid_model" => TextForLanguage("유효한 모델을 선택하세요.", "Select a valid model."),
+        "ai_rate_limited" or "rate_limited" => TextForLanguage("요청 한도에 도달했습니다. 나중에 다시 시도하세요.", "The request limit was reached. Try again later."),
+        "ai_response_invalid" => TextForLanguage("모델이 필요한 JSON 형식으로 응답하지 않았습니다.", "The model did not return the required JSON format."),
+        "ai_timeout" => TextForLanguage("Gemini 요청 시간이 초과되었습니다.", "The Gemini request timed out."),
+        "ai_network_error" => TextForLanguage("Gemini 서비스에 연결할 수 없습니다.", "Could not connect to Gemini."),
+        _ => TextForLanguage("Gemini 요청에 실패했습니다. 잠시 후 다시 시도하세요.", "The Gemini request failed. Please retry later."),
+    };
+
+    private string TextForLanguage(string korean, string english) => Language == "ko" ? korean : english;
+
     private void ApplyLanguage()
     {
         var settings = _settings.Load();
@@ -517,8 +726,11 @@ public sealed class AppModel : Observable
         Text.Use(_language);
         UseToolLanguage(_language);
         SettingsMessage = Text.Saved;
+        GeminiStatus = "";
         Raise(nameof(LoginLabel));
         Raise(nameof(MaskLabel));
+        Raise(nameof(CurrentGeminiModel));
+        if (Section == "Settings" && ShowShell) LoadGeminiModelsCommand.Execute(null);
     }
 
     private void UseToolLanguage(string language)

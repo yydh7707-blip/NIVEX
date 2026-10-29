@@ -100,6 +100,8 @@ async function routeApi(request: Request, url: URL, deps: AppDeps): Promise<Resp
   if (method === "POST" && path === "/api/v1/auth/logout") return logout(request, deps);
   if (method === "GET" && path === "/api/v1/devices/me") return deviceMe(request, deps);
   if (method === "GET" && path === "/api/v1/entitlements/me") return entitlementsMe(request, deps);
+  if (method === "GET" && path === "/api/v1/ai/models") return geminiModels(request, deps);
+  if (method === "POST" && path === "/api/v1/ai/test") return testGeminiModel(request, deps);
   if (method === "POST" && path === "/api/v1/admin/bootstrap") return adminBootstrap(request, deps);
   if (method === "POST" && path === "/api/v1/admin/login") return adminLogin(request, deps);
   if (method === "POST" && path === "/api/v1/admin/logout") return adminLogout(request, deps);
@@ -623,6 +625,116 @@ async function entitlementsMe(request: Request, deps: AppDeps): Promise<Response
     free: hasPlan(records, "FREE", deps.now()),
     pro: hasPlan(records, "PRO", deps.now()),
   });
+}
+
+interface GeminiModel {
+  name?: string;
+  baseModelId?: string;
+  displayName?: string;
+  description?: string;
+  inputTokenLimit?: number;
+  outputTokenLimit?: number;
+  supportedGenerationMethods?: string[];
+}
+
+async function geminiModels(request: Request, deps: AppDeps): Promise<Response> {
+  await requireUser(request, deps);
+  await enforceRateLimit(deps.db, deps.config, request, "ai_models", 20, 3600, deps.now());
+  if (!deps.config.geminiApiKey) {
+    throw new ApiError(503, "ai_not_configured", "AI 연결이 아직 서버에 설정되지 않았습니다.");
+  }
+  const response = await fetchGemini("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {
+    headers: { "x-goog-api-key": deps.config.geminiApiKey },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw geminiProviderError(response.status);
+  const payload = (await response.json()) as { models?: GeminiModel[] };
+  const models = (payload.models ?? [])
+    .filter((model) => model.name?.startsWith("models/") && model.baseModelId &&
+      model.supportedGenerationMethods?.includes("generateContent"))
+    .map((model) => ({
+      id: model.baseModelId!,
+      displayName: model.displayName || model.baseModelId!,
+      description: model.description ?? "",
+      inputTokenLimit: model.inputTokenLimit ?? null,
+      outputTokenLimit: model.outputTokenLimit ?? null,
+      supportsGenerateContent: true,
+    }));
+  return json({ provider: "Google Gemini", models });
+}
+
+async function testGeminiModel(request: Request, deps: AppDeps): Promise<Response> {
+  await requireUser(request, deps);
+  await enforceRateLimit(deps.db, deps.config, request, "ai_model_test", 5, 3600, deps.now());
+  if (!deps.config.geminiApiKey) {
+    throw new ApiError(503, "ai_not_configured", "AI 연결이 아직 서버에 설정되지 않았습니다.");
+  }
+  const body = await readJsonObject(request);
+  const modelId = textField(body, "modelId");
+  if (!/^[A-Za-z0-9._-]{1,128}$/.test(modelId)) {
+    throw new ApiError(400, "invalid_model", "유효한 Gemini 모델을 선택하세요.");
+  }
+  const catalogResponse = await fetchGemini("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", {
+    headers: { "x-goog-api-key": deps.config.geminiApiKey },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!catalogResponse.ok) throw geminiProviderError(catalogResponse.status);
+  const catalog = (await catalogResponse.json()) as { models?: GeminiModel[] };
+  const selected = (catalog.models ?? []).find((model) =>
+    model.baseModelId === modelId && model.supportedGenerationMethods?.includes("generateContent"));
+  if (!selected) throw new ApiError(400, "ai_model_unavailable", "선택한 모델을 사용할 수 없거나 지원되지 않습니다.");
+
+  const response = await fetchGemini(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": deps.config.geminiApiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'Return exactly this JSON object: {"ok":true}' }] }],
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 32, temperature: 0 },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (!response.ok) throw geminiProviderError(response.status);
+  const result = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = result.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim() ?? "";
+  let validJson = false;
+  try {
+    validJson = (JSON.parse(text) as { ok?: unknown }).ok === true;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+  }
+  if (!validJson) throw new ApiError(502, "ai_response_invalid", "모델 응답이 예상한 JSON 형식이 아닙니다.");
+  return json({ success: true, modelId, structuredOutput: true });
+}
+
+function geminiProviderError(status: number): ApiError {
+  if (status === 401 || status === 403) {
+    return new ApiError(502, "ai_provider_auth_error", "Gemini 서버 인증에 실패했습니다. 운영자에게 문의하세요.");
+  }
+  if (status === 429) return new ApiError(429, "ai_rate_limited", "Gemini 요청 한도에 도달했습니다. 잠시 후 다시 시도하세요.");
+  if (status === 404) return new ApiError(400, "ai_model_unavailable", "Gemini 모델을 사용할 수 없습니다.");
+  return new ApiError(502, "ai_provider_error", "Gemini 서비스에 연결하지 못했습니다.");
+}
+
+async function fetchGemini(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new ApiError(504, "ai_timeout", "Gemini 요청 시간이 초과되었습니다.");
+    }
+    if (error instanceof TypeError) {
+      throw new ApiError(502, "ai_network_error", "Gemini 서비스에 연결하지 못했습니다.");
+    }
+    throw error;
+  }
 }
 
 async function adminBootstrap(request: Request, deps: AppDeps): Promise<Response> {

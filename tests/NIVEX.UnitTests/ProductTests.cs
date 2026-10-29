@@ -182,4 +182,10 @@ file sealed class FakeApi : IApiClient
 
     public Task<ApiResult<DeviceProfile>> MeAsync(string accessToken, CancellationToken cancellationToken) =>
         Task.FromResult(new ApiResult<DeviceProfile>(true, 200, "", "", new DeviceProfile()));
+
+    public Task<ApiResult<List<GeminiModelInfo>>> GeminiModelsAsync(string accessToken, CancellationToken cancellationToken) =>
+        Task.FromResult(new ApiResult<List<GeminiModelInfo>>(true, 200, "", "", []));
+
+    public Task<ApiResult<GeminiModelTestResponse>> TestGeminiModelAsync(string modelId, string accessToken, CancellationToken cancellationToken) =>
+        Task.FromResult(new ApiResult<GeminiModelTestResponse>(false, 503, "ai_not_configured", "", null));
 }

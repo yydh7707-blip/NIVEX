@@ -8,6 +8,8 @@ public interface IApiClient
     Task<ApiResult<TokenResponse>> RefreshAsync(string refreshToken, CancellationToken cancellationToken);
     Task<ApiResult<bool>> LogoutAsync(string accessToken, string refreshToken, CancellationToken cancellationToken);
     Task<ApiResult<DeviceProfile>> MeAsync(string accessToken, CancellationToken cancellationToken);
+    Task<ApiResult<List<GeminiModelInfo>>> GeminiModelsAsync(string accessToken, CancellationToken cancellationToken);
+    Task<ApiResult<GeminiModelTestResponse>> TestGeminiModelAsync(string modelId, string accessToken, CancellationToken cancellationToken);
 }
 
 public interface IVault
