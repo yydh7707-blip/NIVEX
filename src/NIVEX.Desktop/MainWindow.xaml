@@ -27,17 +27,31 @@
         </Grid.RowDefinitions>
 
         <ScrollViewer x:Name="BrandPane" Grid.Row="0" Grid.Column="0" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" Opacity="0">
-          <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="48,36">
-              <Image Source="/Assets/nivex-mark.png" Width="248" Height="248" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center"/>
-              <Border Height="1" Width="52" HorizontalAlignment="Center" Background="{StaticResource Silver}" Margin="0,2,0,18" Opacity="0.68"/>
-              <TextBlock Text="{Binding Text.Brand}" FontSize="15" Foreground="{StaticResource Muted}" LineHeight="23" TextAlignment="Center" MaxWidth="340"/>
+          <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" Background="{StaticResource BrandBackdrop}">
+            <Border Height="2" VerticalAlignment="Top" Background="{StaticResource Silver}" Opacity="0.62"/>
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="40,48">
+              <TextBlock Text="{Binding Text.BrandEyebrow}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BrandMuted}"
+                         HorizontalAlignment="Center" Margin="0,0,0,20"/>
+              <Border Width="236" Height="236" Padding="8" Background="#FF050708" BorderBrush="{StaticResource BrandLine}"
+                      BorderThickness="1" CornerRadius="18" HorizontalAlignment="Center">
+                <Border.Effect>
+                  <DropShadowEffect Color="#000000" BlurRadius="28" ShadowDepth="10" Opacity="0.34"/>
+                </Border.Effect>
+                <Image Source="/Assets/nivex-mark.png" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+              </Border>
+              <Border Height="1" Width="42" HorizontalAlignment="Center" Background="{StaticResource Silver}" Margin="0,26,0,18" Opacity="0.82"/>
+              <TextBlock Text="{Binding Text.Brand}" FontSize="16" FontWeight="Medium" Foreground="{StaticResource BrandText}"
+                         LineHeight="25" TextAlignment="Center" MaxWidth="360"/>
+              <TextBlock Text="{Binding Text.BrandStatus}" FontSize="11" FontWeight="Medium" Foreground="{StaticResource BrandMuted}"
+                         HorizontalAlignment="Center" Margin="0,18,0,0"/>
             </StackPanel>
-            <TextBlock Text="{Binding Version}" Foreground="{StaticResource Faint}" FontSize="12" VerticalAlignment="Bottom" Margin="56,0,24,28"/>
+            <TextBlock Text="{Binding Version}" Foreground="{StaticResource BrandMuted}" FontSize="12" VerticalAlignment="Bottom" Margin="44,0,24,28"/>
+            <TextBlock Text="NIVEX  /  WINDOWS" Foreground="{StaticResource BrandMuted}" FontSize="10" FontWeight="SemiBold"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24,0,40,28"/>
           </Grid>
         </ScrollViewer>
 
-        <Rectangle x:Name="ColumnRule" Grid.Column="0" Grid.Row="0" Width="1" HorizontalAlignment="Right" Fill="#FFD8DDE1" IsHitTestVisible="False"/>
+        <Rectangle x:Name="ColumnRule" Grid.Column="0" Grid.Row="0" Width="1" HorizontalAlignment="Right" Fill="#FF293538" IsHitTestVisible="False"/>
 
         <ScrollViewer x:Name="LoginPane" Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" Opacity="0">
           <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
@@ -345,18 +359,27 @@
       </Border>
     </Grid>
 
-    <Grid x:Name="IntroHost" Background="#F5F6F7" Panel.ZIndex="8">
+    <Grid x:Name="IntroHost" Background="{StaticResource BrandBackdrop}" Panel.ZIndex="8">
+      <Border Height="2" VerticalAlignment="Top" Background="{StaticResource Silver}" Opacity="0.62"/>
       <StackPanel x:Name="IntroMark" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0">
         <StackPanel.RenderTransform>
-          <TranslateTransform x:Name="IntroShift" Y="10"/>
+          <TranslateTransform x:Name="IntroShift" Y="14"/>
         </StackPanel.RenderTransform>
-        <Image Source="/Assets/nivex-mark.png" Width="190" Height="190" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
-          <Image.Effect><BlurEffect x:Name="IntroBlur" Radius="14"/></Image.Effect>
-        </Image>
-        <TextBlock x:Name="IntroWordmark" Text="N I V E X" FontSize="14" FontWeight="Medium"
-                   Foreground="{StaticResource Silver}" HorizontalAlignment="Center" Margin="0,2,0,0" Opacity="0"/>
-        <Border x:Name="IntroShine" Height="1" Width="44" Background="{StaticResource Silver}" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
+        <Border Width="254" Height="254" Padding="10" Background="#FF050708" BorderBrush="{StaticResource BrandLine}"
+                BorderThickness="1" CornerRadius="20">
+          <Border.Effect>
+            <DropShadowEffect Color="#000000" BlurRadius="34" ShadowDepth="12" Opacity="0.42"/>
+          </Border.Effect>
+          <Image Source="/Assets/nivex-mark.png" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+            <Image.Effect><BlurEffect x:Name="IntroBlur" Radius="14"/></Image.Effect>
+          </Image>
+        </Border>
+        <TextBlock x:Name="IntroCaption" Text="{Binding Text.IntroCaption}" FontSize="11" FontWeight="SemiBold"
+                   Foreground="{StaticResource BrandMuted}" HorizontalAlignment="Center" Margin="0,26,0,0" Opacity="0"/>
+        <Border x:Name="IntroShine" Height="2" Width="52" Background="{StaticResource Silver}" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
       </StackPanel>
+      <TextBlock Text="NIVEX  /  WINDOWS" Foreground="{StaticResource BrandMuted}" FontSize="10" FontWeight="SemiBold"
+                 HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,30" Opacity="0.7"/>
     </Grid>
   </Grid>
 </Window>

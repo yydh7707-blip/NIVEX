@@ -6,6 +6,16 @@ using NIVEX.Toolkit;
 
 namespace NIVEX.Desktop;
 
+public enum FixFaceState
+{
+    Idle,
+    Scanning,
+    Analyzing,
+    Repairing,
+    Completed,
+    Error,
+}
+
 public sealed class FixRow(string id) : Observable
 {
     private CheckStatus _status = CheckStatus.Pending;
@@ -86,6 +96,7 @@ public sealed class FixVm : ToolVm
     private string _compare = "";
     private string _diagNote = "";
     private bool _isOverview = true;
+    private FixFaceState _mascotState = FixFaceState.Idle;
 
     public FixVm(FixService fix, ToolkitModel host, bool isAdmin, string version = "", string dataDir = "")
     {
@@ -146,6 +157,11 @@ public sealed class FixVm : ToolVm
     public string Message { get => _message; private set => Set(ref _message, value); }
     public string LastScan => _lastScan.Length == 0 ? ToolText.Get("neverScanned") : _lastScan;
     public string AdminText => ToolText.Get(IsAdmin ? "adminYes" : "adminNo");
+    public FixFaceState MascotState
+    {
+        get => _mascotState;
+        private set => Set(ref _mascotState, value);
+    }
 
     protected override void OnLanguage()
     {
@@ -157,6 +173,7 @@ public sealed class FixVm : ToolVm
     private async Task ScanAsync(bool full)
     {
         Busy = true;
+        MascotState = FixFaceState.Scanning;
         Message = "";
         Summary = ToolText.Get("scanning");
         _cts = new CancellationTokenSource();
@@ -176,9 +193,12 @@ public sealed class FixVm : ToolVm
             {
                 Message = ToolText.Get("scanCancelled");
                 Summary = "";
+                MascotState = FixFaceState.Idle;
                 return;
             }
             foreach (var result in results) Rows.FirstOrDefault(x => x.Id == result.Id)?.Apply(result);
+            MascotState = FixFaceState.Analyzing;
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
             var healthy = results.Count(r => r.Status == CheckStatus.Healthy);
             var problems = results.Count(r => r.Status == CheckStatus.Problem);
             var unknown = results.Count(r => r.Status == CheckStatus.Unknown);
@@ -188,6 +208,7 @@ public sealed class FixVm : ToolVm
             Compare = "";
             RebuildFindings();
             RebuildRecurringIssues(results);
+            MascotState = failed > 0 ? FixFaceState.Error : FixFaceState.Completed;
             _lastScan = Fmt.Time(DateTimeOffset.Now);
             Notify(nameof(LastScan));
             _host.AddHistory(new HistoryRecord
@@ -204,10 +225,18 @@ public sealed class FixVm : ToolVm
         catch (InvalidOperationException)
         {
             Message = ToolText.Get("flowBusy2");
+            MascotState = FixFaceState.Error;
+        }
+        catch
+        {
+            MascotState = FixFaceState.Error;
+            Message = ToolText.Get("scanFailed");
+            throw;
         }
         finally
         {
             _active = false;
+            if (MascotState is FixFaceState.Scanning or FixFaceState.Analyzing) MascotState = FixFaceState.Error;
             Busy = false;
             _cts.Dispose();
             _cts = null;
@@ -218,12 +247,29 @@ public sealed class FixVm : ToolVm
     {
         if (parameter is not FixRow row || row.RepairId is null) return;
         Busy = true;
+        MascotState = FixFaceState.Repairing;
         Message = "";
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        try { await RepairOneAsync(row, token); }
+        try
+        {
+            var result = await RepairOneAsync(row, token);
+            MascotState = result switch
+            {
+                true => FixFaceState.Completed,
+                false when token.IsCancellationRequested => FixFaceState.Idle,
+                false => FixFaceState.Error,
+                _ => FixFaceState.Idle,
+            };
+        }
+        catch
+        {
+            MascotState = FixFaceState.Error;
+            throw;
+        }
         finally
         {
+            if (MascotState == FixFaceState.Repairing) MascotState = FixFaceState.Error;
             Busy = false;
             _cts.Dispose();
             _cts = null;
@@ -238,9 +284,11 @@ public sealed class FixVm : ToolVm
         var plan = string.Join("\n", rows.Select((r, i) => $"{i + 1}. {ToolText.Get("rep_" + r.RepairId)}"));
         if (!await _host.Confirm.AskAsync(ToolText.Get("workspaceTitle"), ToolText.F("workspaceBody", plan))) return;
         Busy = true;
+        MascotState = FixFaceState.Repairing;
         Message = "";
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
+        var finalState = FixFaceState.Completed;
         try
         {
             foreach (var row in rows)
@@ -248,13 +296,21 @@ public sealed class FixVm : ToolVm
                 var ok = await RepairOneAsync(row, token);
                 if (ok is not true)
                 {
-                    if (ok == false) Message = ToolText.Get("workspaceStopped");
+                    finalState = ok is false && !token.IsCancellationRequested ? FixFaceState.Error : FixFaceState.Idle;
+                    if (ok == false && !token.IsCancellationRequested) Message = ToolText.Get("workspaceStopped");
                     break;
                 }
             }
+            MascotState = finalState;
+        }
+        catch
+        {
+            MascotState = FixFaceState.Error;
+            throw;
         }
         finally
         {
+            if (MascotState == FixFaceState.Repairing) MascotState = FixFaceState.Error;
             Busy = false;
             _cts.Dispose();
             _cts = null;

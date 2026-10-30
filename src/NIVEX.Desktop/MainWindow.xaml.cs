@@ -65,8 +65,8 @@ public partial class MainWindow : Window
         IntroMark.BeginAnimation(OpacityProperty, logoFade);
         IntroShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(760)) { BeginTime = TimeSpan.FromMilliseconds(60), EasingFunction = ease });
         IntroBlur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation(14, 0, TimeSpan.FromMilliseconds(820)) { BeginTime = TimeSpan.FromMilliseconds(60), EasingFunction = ease });
-        IntroWordmark.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(360)) { BeginTime = TimeSpan.FromMilliseconds(380), EasingFunction = ease });
-        IntroShine.BeginAnimation(WidthProperty, new DoubleAnimation(0, 44, TimeSpan.FromMilliseconds(300)) { BeginTime = TimeSpan.FromMilliseconds(520), EasingFunction = ease });
+        IntroCaption.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(360)) { BeginTime = TimeSpan.FromMilliseconds(380), EasingFunction = ease });
+        IntroShine.BeginAnimation(WidthProperty, new DoubleAnimation(0, 52, TimeSpan.FromMilliseconds(300)) { BeginTime = TimeSpan.FromMilliseconds(520), EasingFunction = ease });
         IntroShine.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 0.58, TimeSpan.FromMilliseconds(300)) { BeginTime = TimeSpan.FromMilliseconds(520), EasingFunction = ease });
 
         _introTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1320) };

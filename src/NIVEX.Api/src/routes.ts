@@ -180,7 +180,7 @@ async function verifyTurnstile(request: Request, deps: AppDeps): Promise<Respons
   return json({ verificationId: id, expiresAt: expires }, 201);
 }
 
-export const CONSENT_VERSION = "2026-10-29";
+export const CONSENT_VERSION = "2026-10-30";
 
 // The server never trusts a bare `consent: true`; the request must name the policy version being accepted.
 function requireConsent(body: Record<string, unknown>): void {

@@ -2,6 +2,8 @@ import { policies, policyMeta, policyUi, type Block, type PolicyKey, type Policy
 import { operator } from "./operator.ts";
 import { nivexMark } from "./icons.ts";
 
+const policyViewCleanup = new WeakMap<HTMLElement, () => void>();
+
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -65,6 +67,10 @@ function renderBlock(block: Block, missing: string, supportLabel: string): HTMLE
     return list;
   }
   const wrap = el("div", "policy-table-wrap");
+  if (block.head.length > 2) {
+    wrap.classList.add("policy-table-wide");
+    wrap.tabIndex = 0;
+  }
   const table = el("table", "policy-table");
   const head = el("thead");
   const headRow = el("tr");
@@ -75,15 +81,18 @@ function renderBlock(block: Block, missing: string, supportLabel: string): HTMLE
   });
   head.append(headRow);
   const body = el("tbody");
-  for (const [term, detail] of block.rows) {
+  for (const rowData of block.rows) {
     const row = el("tr");
-    const th = el("th", undefined, term);
+    const th = el("th", undefined, rowData[0] ?? "");
     th.scope = "row";
-    const td = el("td");
-    const filled = fill(detail, missing);
-    if (detail === "/support") td.append(internalLink("/support", supportLabel));
-    else td.append(filled.node);
-    row.append(th, td);
+    row.append(th);
+    for (const detail of rowData.slice(1)) {
+      const td = el("td");
+      const filled = fill(detail, missing);
+      if (detail === "/support") td.append(internalLink("/support", supportLabel));
+      else td.append(filled.node);
+      row.append(td);
+    }
     body.append(row);
   }
   table.append(head, body);
@@ -96,6 +105,8 @@ export function documentTitle(key: PolicyKey, lang: PolicyLang): string {
 }
 
 export function renderPolicy(view: HTMLElement, key: PolicyKey, lang: PolicyLang): void {
+  policyViewCleanup.get(view)?.();
+  policyViewCleanup.delete(view);
   const doc = policies[key][lang];
   const ui = policyUi[lang];
   const meta = policyMeta[key];
@@ -111,6 +122,7 @@ export function renderPolicy(view: HTMLElement, key: PolicyKey, lang: PolicyLang
   brand.append(nivexMark(), el("span", undefined, "NIVEX"));
   const title = el("h1", undefined, doc.title);
   title.id = "policy-title";
+  title.tabIndex = -1;
   const dates = el("dl", "policy-dates");
   const updated = el("div");
   updated.append(el("dt", undefined, ui.updated), el("dd", undefined, formatDate(meta.updated, lang)));
@@ -119,10 +131,17 @@ export function renderPolicy(view: HTMLElement, key: PolicyKey, lang: PolicyLang
     el("dt", undefined, ui.effective),
     el("dd", meta.effective ? undefined : "is-empty", meta.effective ? formatDate(meta.effective, lang) : ui.effectivePending),
   );
-  dates.append(updated, effective);
-  head.append(brand, title, el("p", "lede", doc.lead), dates);
+  const version = el("div");
+  version.append(el("dt", undefined, ui.version), el("dd", undefined, meta.version));
+  dates.append(updated, effective, version);
+  const headerActions = el("div", "policy-actions");
+  const print = el("button", "btn ghost", ui.print);
+  print.type = "button";
+  print.addEventListener("click", () => window.print());
+  headerActions.append(print);
+  head.append(brand, title, el("p", "lede", doc.lead), dates, headerActions);
 
-  const incomplete = !operator.operatorName.trim() || !operator.supportEmail.trim() || !meta.effective;
+  const incomplete = !operator.operatorName.trim() || !operator.supportEmail.trim() || !meta.effective || !meta.legalReviewConfirmed;
   const banner = incomplete ? el("aside", "policy-banner") : null;
   if (banner) {
     banner.setAttribute("role", "note");
@@ -132,13 +151,44 @@ export function renderPolicy(view: HTMLElement, key: PolicyKey, lang: PolicyLang
   const layout = el("div", "policy-layout");
   const toc = el("nav", "policy-toc");
   toc.setAttribute("aria-label", ui.toc);
-  toc.append(el("p", "meta", ui.toc));
+  const tocToggle = el("button", "policy-toc-toggle", ui.toc);
+  tocToggle.type = "button";
+  tocToggle.setAttribute("aria-expanded", "true");
+  const tocListId = `${key}-toc-list`;
+  tocToggle.setAttribute("aria-controls", tocListId);
+  const tocMedia = window.matchMedia("(max-width: 900px)");
+  const updateTocLayout = (): void => {
+    const mobile = tocMedia.matches;
+    tocToggle.hidden = !mobile;
+    tocList.hidden = mobile;
+    tocToggle.setAttribute("aria-expanded", String(!mobile));
+  };
+  toc.append(tocToggle);
   const tocList = el("ol");
+  tocList.id = tocListId;
+  tocList.hidden = tocMedia.matches;
+  const tocLinks = new Map<string, HTMLAnchorElement>();
   doc.sections.forEach((section) => {
     const item = el("li");
-    item.append(anchor(section.title.replace(/^\d+\.\s*/, ""), `${key}-${section.id}`));
+    const id = `${key}-${section.id}`;
+    const link = anchor(section.title.replace(/^\d+\.\s*/, ""), id);
+    link.addEventListener("click", () => {
+      if (window.matchMedia("(max-width: 900px)").matches) {
+        tocList.hidden = true;
+        tocToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+    tocLinks.set(id, link);
+    item.append(link);
     tocList.append(item);
   });
+  tocToggle.addEventListener("click", () => {
+    const expanded = tocToggle.getAttribute("aria-expanded") !== "true";
+    tocToggle.setAttribute("aria-expanded", String(expanded));
+    tocList.hidden = !expanded;
+  });
+  tocMedia.addEventListener("change", updateTocLayout);
+  updateTocLayout();
   toc.append(tocList);
 
   const body = el("div", "policy-body");
@@ -164,14 +214,38 @@ export function renderPolicy(view: HTMLElement, key: PolicyKey, lang: PolicyLang
 
   const support = el("aside", "policy-support");
   support.append(el("h2", undefined, ui.supportTitle), el("p", undefined, ui.supportBody));
-  const actions = el("div", "actions");
-  actions.append(internalLink("/support", ui.supportLink, "btn primary"), internalLink(`/${other}`, ui.other[other], "btn ghost"));
-  support.append(actions);
+  const supportActions = el("div", "actions");
+  supportActions.append(internalLink("/support", ui.supportLink, "btn primary"), internalLink(`/${other}`, ui.other[other], "btn ghost"));
+  support.append(supportActions);
   body.append(support);
 
   layout.append(toc, body);
+  const topButton = el("button", "policy-to-top", `↑ ${ui.toTop}`);
+  topButton.type = "button";
+  topButton.addEventListener("click", () => scrollToId("policy-title"));
   page.append(head);
   if (banner) page.append(banner);
-  page.append(layout);
+  page.append(layout, topButton);
   view.replaceChildren(page);
+
+  let observer: IntersectionObserver | undefined;
+  if ("IntersectionObserver" in window) {
+    const activeObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      const activeId = visible[0]?.target.id;
+      if (!activeId) return;
+      for (const [id, link] of tocLinks) {
+        const active = id === activeId;
+        link.classList.toggle("is-active", active);
+        if (active) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      }
+    }, { rootMargin: "-15% 0px -75% 0px" });
+    observer = activeObserver;
+    body.querySelectorAll(".policy-section").forEach((section) => activeObserver.observe(section));
+  }
+  policyViewCleanup.set(view, () => {
+    observer?.disconnect();
+    tocMedia.removeEventListener("change", updateTocLayout);
+  });
 }

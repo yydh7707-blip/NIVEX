@@ -77,8 +77,11 @@ export const en = {
   guideTitle: "Sign-in guide",
   guide: ["Pass the security check and create a Device ID.", "Store the activation and recovery codes somewhere private.", "Open NIVEX and enter the Device ID and activation code.", "Later launches restore the session with the key stored on this PC.", "To move PCs, use the recovery code to detach the old installation, then activate again."],
   releaseTitle: "Release notes",
-  releaseBody: "NIVEX Intelligence Gemini model settings · Version 0.3.3",
+  releaseBody: "NEVER mascot animation and bilingual policy updates · Version 0.3.5",
   releaseUpdates: [
+    "NEVER now appears as a face-only mascot with gentle blinking tied to Fix scan and repair states.",
+    "Privacy Policy and Terms now provide Korean and English drafts with IP-verification details, data retention and deletion disclosures, responsive contents navigation, and print support. Unconfirmed operator and legal details remain explicitly marked for review.",
+    "The startup intro and sign-in brand panel now use a deep charcoal backdrop, so the white NIVEX mark stays crisp and distinct. The duplicate wordmark was replaced with a clear device-authentication caption.",
     "Settings now lets signed-in users list Gemini models available to the server, test a selected model's structured JSON response, and save a model preference. Gemini API credentials remain server-side. AI Investigator and Repair Chain generation are not included in this release.",
     "The desktop now uses a light, high-contrast interface. Fix opens to a compact scan overview, with detailed diagnostics and tools available in a separate view.",
     "System file checks distinguish a tool's exit result from a verified diagnosis; unclear output is reported as unverified.",

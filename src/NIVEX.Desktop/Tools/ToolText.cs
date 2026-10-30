@@ -181,6 +181,7 @@ public sealed class ToolText : Observable
         ["loading"] = ("불러오는 중…", "Loading…"),
         ["scanning"] = ("검사 중…", "Scanning…"),
         ["scanCancelled"] = ("검사를 취소했습니다.", "Scan cancelled."),
+        ["scanFailed"] = ("검사를 완료하지 못했습니다. 권한과 시스템 상태를 확인한 뒤 다시 시도하세요.", "The scan could not be completed. Check permissions and system status, then try again."),
         ["scanSummary"] = ("정상 {0} · 문제 {1} · 확인 불가 {2} · 실패 {3}", "Healthy {0} · Problems {1} · Unverified {2} · Failed {3}"),
         ["adminNote"] = ("전체 검사의 SFC/DISM은 관리자 권한이 필요합니다. 관리자로 실행하지 않으면 해당 항목은 '확인 불가'로 표시됩니다.", "SFC/DISM in the full scan need administrator rights. Without them those items are shown as unverified."),
         ["repair"] = ("복구", "Repair"),

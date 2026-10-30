@@ -47,7 +47,7 @@ function updateMusicButton(): void {
 }
 backgroundMusic.addEventListener("play", updateMusicButton);
 backgroundMusic.addEventListener("pause", updateMusicButton);
-let config: PublicConfig = { version: "0.3.3", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
+let config: PublicConfig = { version: "0.3.5", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
 
 function t(): Copy {
   return copy;
@@ -234,7 +234,7 @@ function renderGuide(): void {
 
 function renderReleases(): void {
   const block = section(t().releaseTitle);
-  block.append(el("p", "kicker", config.offline ? "0.3.3" : config.version), el("p", undefined, t().releaseBody));
+  block.append(el("p", "kicker", config.offline ? "0.3.5" : config.version), el("p", undefined, t().releaseBody));
   const updates = el("ul", "list");
   for (const update of t().releaseUpdates) updates.append(el("li", undefined, update));
   block.append(updates);

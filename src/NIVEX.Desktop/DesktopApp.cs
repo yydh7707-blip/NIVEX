@@ -65,6 +65,9 @@ public sealed class UiText : Observable
     public string Login { get; private set; } = "";
     public string Working { get; private set; } = "";
     public string Brand { get; private set; } = "";
+    public string BrandEyebrow { get; private set; } = "";
+    public string BrandStatus { get; private set; } = "";
+    public string IntroCaption { get; private set; } = "";
     public string IdHint { get; private set; } = "";
     public string CodeHint { get; private set; } = "";
     public string CreateLink { get; private set; } = "";
@@ -133,7 +136,10 @@ public sealed class UiText : Observable
         Hide = ko ? "입력 숨기기" : "Hide input";
         Login = ko ? "로그인" : "Sign in";
         Working = ko ? "로그인 중" : "Signing in";
-        Brand = ko ? "장치 ID로 이 PC를 인증합니다." : "Authenticate this PC with a Device ID.";
+        Brand = ko ? "내 장치를 위한 안전한 작업 공간" : "A secure workspace for your device";
+        BrandEyebrow = ko ? "NIVEX  /  장치 보안" : "NIVEX  /  DEVICE SECURITY";
+        BrandStatus = ko ? "개인 키는 이 PC의 보안 저장소에 보관됩니다." : "Your private key stays protected on this PC.";
+        IntroCaption = ko ? "WINDOWS용 장치 인증" : "DEVICE AUTHENTICATION FOR WINDOWS";
         IdHint = "NIV-XXXX-XXXX-XXXX-XXXX";
         CodeHint = ko ? "웹에서 발급한 코드" : "Code from the website";
         CreateLink = ko ? "장치 ID 만들기" : "Create a Device ID";

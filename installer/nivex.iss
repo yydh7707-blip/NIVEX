@@ -1,5 +1,5 @@
 ﻿#define AppName "NIVEX"
-#define AppVersion "0.3.3"
+#define AppVersion "0.3.5"
 #define SourceExe "..\artifacts\publish-fd\NIVEX.Desktop.exe"
 #define RuntimeUrl "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe"
 

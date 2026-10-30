@@ -13,6 +13,14 @@
     <SolidColorBrush x:Key="SurfaceRaised" Color="#F0F2F3"/>
     <SolidColorBrush x:Key="SurfaceHover" Color="#E8ECEE"/>
     <SolidColorBrush x:Key="FocusEdge" Color="#4E8791"/>
+    <SolidColorBrush x:Key="BrandText" Color="#F3F6F7"/>
+    <SolidColorBrush x:Key="BrandMuted" Color="#AAB6BA"/>
+    <SolidColorBrush x:Key="BrandLine" Color="#293538"/>
+    <LinearGradientBrush x:Key="BrandBackdrop" StartPoint="0,0" EndPoint="1,1">
+      <GradientStop Color="#0B0E10" Offset="0"/>
+      <GradientStop Color="#111719" Offset="0.58"/>
+      <GradientStop Color="#171E20" Offset="1"/>
+    </LinearGradientBrush>
     <Duration x:Key="MotionQuick">0:0:0.12</Duration>
     <Duration x:Key="MotionStandard">0:0:0.2</Duration>
     <Duration x:Key="MotionPage">0:0:0.28</Duration>
