@@ -102,25 +102,54 @@ public static class DeviceInspector
     {
         var output = await runner.RunAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", Script], TimeSpan.FromSeconds(45), Encoding.UTF8, ct);
         if (output.TimedOut || output.ExitCode != 0) return null;
-        return Parse(output.Output);
+        return TryParse(output.Output, out var problems) ? problems : null;
     }
 
     public static IReadOnlyList<DeviceProblem> Parse(string json)
+        => TryParse(json, out var problems) ? problems : [];
+
+    public static bool TryParse(string json, out IReadOnlyList<DeviceProblem> problems)
     {
         var text = json.Trim();
-        if (text.Length == 0) return [];
+        if (text.Length == 0)
+        {
+            problems = [];
+            return true;
+        }
         try
         {
             using var doc = JsonDocument.Parse(text);
             var items = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().ToList() : [doc.RootElement];
-            return items
-                .Where(i => i.ValueKind == JsonValueKind.Object && i.TryGetProperty("ConfigManagerErrorCode", out _))
-                .Select(i => new DeviceProblem(i.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "", i.GetProperty("ConfigManagerErrorCode").GetInt32()))
-                .ToList();
+            var parsed = new List<DeviceProblem>(items.Count);
+            foreach (var item in items)
+            {
+                if (item.ValueKind != JsonValueKind.Object
+                    || !item.TryGetProperty("ConfigManagerErrorCode", out var code)
+                    || !code.TryGetInt32(out var value))
+                {
+                    problems = [];
+                    return false;
+                }
+
+                var name = "";
+                if (item.TryGetProperty("Name", out var nameElement))
+                {
+                    if (nameElement.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                    {
+                        problems = [];
+                        return false;
+                    }
+                    name = nameElement.GetString() ?? "";
+                }
+                parsed.Add(new DeviceProblem(name, value));
+            }
+            problems = parsed;
+            return true;
         }
         catch (JsonException)
         {
-            return [];
+            problems = [];
+            return false;
         }
     }
 }

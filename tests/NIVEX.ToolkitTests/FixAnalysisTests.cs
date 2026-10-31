@@ -133,6 +133,33 @@ public sealed class FixAnalysisTests
     }
 
     [Fact]
+    public void FileInventoryScansNestedFileMetadata()
+    {
+        using var dir = new TempDir();
+        var nested = Directory.CreateDirectory(Path.Combine(dir.Path, "nested"));
+        File.WriteAllText(Path.Combine(dir.Path, "one.txt"), "not opened");
+        File.WriteAllText(Path.Combine(nested.FullName, "two.txt"), "not opened");
+
+        var scan = FileInventoryScanner.ScanRoots([dir.Path], TimeSpan.FromSeconds(10), CancellationToken.None);
+
+        Assert.True(scan.Completed);
+        Assert.Equal(2, scan.FilesScanned);
+        Assert.Equal(2, scan.DirectoriesScanned);
+        Assert.Equal(0, scan.Inaccessible);
+    }
+
+    [Fact]
+    public void FileInventoryHonorsCancellation()
+    {
+        using var dir = new TempDir();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            FileInventoryScanner.ScanRoots([dir.Path], TimeSpan.FromSeconds(10), cancellation.Token));
+    }
+
+    [Fact]
     public void ReportEscapesHtmlAndOmitsPaths()
     {
         var labels = new FixReport.Labels("T", "G", "", "F", "Rec", "U", "C", "E", "N",

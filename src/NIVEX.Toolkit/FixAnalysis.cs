@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Xml.Linq;
 using Microsoft.Win32;
@@ -20,6 +22,7 @@ public sealed record Finding(
     string? SuggestedNextStep = null);
 public sealed record CheckComparison(string CheckId, CheckStatus Before, CheckStatus After, Verdict Verdict, RepairExecution Execution);
 public sealed record StartupEntry(string Name, string Command, string Location, bool PathExists);
+public sealed record StartupScan(IReadOnlyList<StartupEntry> Entries, int InaccessibleLocations);
 public sealed record ErrorEvent(
     DateTimeOffset Time,
     string Log,
@@ -33,6 +36,8 @@ public sealed record ErrorEvent(
 public sealed record DumpFile(string Path, long Size, DateTimeOffset Created);
 public sealed record LargeFile(string Path, long Size);
 public sealed record LargeFileScan(IReadOnlyList<LargeFile> Files, int Inaccessible, long ScannedFiles = 0);
+public sealed record FileInventoryProgress(long FilesScanned, int DirectoriesScanned, int PendingDirectories, int Inaccessible, TimeSpan Elapsed, TimeSpan EstimatedRemaining);
+public sealed record FileInventoryScan(long FilesScanned, int DirectoriesScanned, int Inaccessible, bool Completed, TimeSpan Elapsed);
 
 public static class RootCauseAnalyzer
 {
@@ -128,9 +133,13 @@ public static class StartupInspector
 
     // Read-only: lists Run-key entries and whether the target file exists. Nothing is changed.
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public static IReadOnlyList<StartupEntry> Read()
+    public static IReadOnlyList<StartupEntry> Read() => Scan().Entries;
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public static StartupScan Scan()
     {
         var entries = new List<StartupEntry>();
+        var inaccessible = 0;
         foreach (var (hive, label) in Hives)
         {
             try
@@ -146,10 +155,10 @@ public static class StartupInspector
             }
             catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
             {
-                // unreadable hive: skipped
+                inaccessible++;
             }
         }
-        return entries.OrderBy(e => e.PathExists).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        return new StartupScan(entries.OrderBy(e => e.PathExists).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList(), inaccessible);
     }
 
     public static string? ExtractPath(string command)
@@ -304,6 +313,138 @@ public static class LargeFileFinder
         }
         progress?.Report((int)Math.Min(scanned, int.MaxValue));
         return new LargeFileScan(files.UnorderedItems.Select(x => x.Element).OrderByDescending(f => f.Size).ToList(), denied, scanned);
+    }
+}
+
+public static class FileInventoryScanner
+{
+    public static FileInventoryScan ScanLocalDrives(
+        TimeSpan timeLimit,
+        CancellationToken ct,
+        IProgress<FileInventoryProgress>? progress = null)
+    {
+        var roots = new List<string>();
+        var inaccessible = 0;
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if ((drive.DriveType is DriveType.Fixed or DriveType.Removable) && drive.IsReady)
+                    roots.Add(drive.RootDirectory.FullName);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                inaccessible++;
+            }
+        }
+        return ScanRoots(roots, timeLimit, ct, progress, inaccessible);
+    }
+
+    public static FileInventoryScan ScanRoots(
+        IEnumerable<string> roots,
+        TimeSpan timeLimit,
+        CancellationToken ct,
+        IProgress<FileInventoryProgress>? progress = null,
+        int inaccessible = 0)
+    {
+        if (timeLimit <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeLimit));
+
+        var timer = Stopwatch.StartNew();
+        var pending = new Stack<string>();
+        foreach (var root in roots)
+            if (Directory.Exists(root)) pending.Push(root);
+            else inaccessible++;
+
+        long filesScanned = 0;
+        var directoriesScanned = 0;
+        var nextProgress = TimeSpan.Zero;
+        while (pending.Count > 0 && timer.Elapsed < timeLimit)
+        {
+            ct.ThrowIfCancellationRequested();
+            var current = pending.Pop();
+            directoriesScanned++;
+            try
+            {
+                foreach (var directory in Directory.EnumerateDirectories(current))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (timer.Elapsed >= timeLimit) break;
+                    try
+                    {
+                        if (!File.GetAttributes(directory).HasFlag(FileAttributes.ReparsePoint)) pending.Push(directory);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                    {
+                        inaccessible++;
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                inaccessible++;
+            }
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(current))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (timer.Elapsed >= timeLimit) break;
+                    try
+                    {
+                        if (!File.GetAttributes(file).HasFlag(FileAttributes.ReparsePoint))
+                        {
+                            var metadata = new FileInfo(file);
+                            _ = metadata.Length;
+                            _ = metadata.LastWriteTimeUtc;
+                            filesScanned++;
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                    {
+                        inaccessible++;
+                    }
+
+                    if (timer.Elapsed >= nextProgress)
+                    {
+                        ReportProgress(progress, filesScanned, directoriesScanned, pending.Count + 1, inaccessible, timer.Elapsed, timeLimit);
+                        nextProgress = timer.Elapsed + TimeSpan.FromSeconds(1);
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                inaccessible++;
+            }
+
+            if (timer.Elapsed >= nextProgress)
+            {
+                ReportProgress(progress, filesScanned, directoriesScanned, pending.Count, inaccessible, timer.Elapsed, timeLimit);
+                nextProgress = timer.Elapsed + TimeSpan.FromSeconds(1);
+            }
+        }
+
+        var completed = pending.Count == 0 && timer.Elapsed <= timeLimit;
+        ReportProgress(progress, filesScanned, directoriesScanned, pending.Count, inaccessible, timer.Elapsed, timeLimit);
+        return new FileInventoryScan(filesScanned, directoriesScanned, inaccessible, completed, timer.Elapsed);
+    }
+
+    private static void ReportProgress(
+        IProgress<FileInventoryProgress>? progress,
+        long filesScanned,
+        int directoriesScanned,
+        int pendingDirectories,
+        int inaccessible,
+        TimeSpan elapsed,
+        TimeSpan timeLimit)
+    {
+        if (progress is null) return;
+        var directoriesPerSecond = elapsed.TotalSeconds > 0 ? directoriesScanned / elapsed.TotalSeconds : 0;
+        var estimateSeconds = directoriesPerSecond > 0 ? pendingDirectories / directoriesPerSecond : timeLimit.TotalSeconds - elapsed.TotalSeconds;
+        var remainingBudget = Math.Max(0, timeLimit.TotalSeconds - elapsed.TotalSeconds);
+        var estimatedRemaining = TimeSpan.FromSeconds(Math.Clamp(estimateSeconds, 0, remainingBudget));
+        progress.Report(new FileInventoryProgress(filesScanned, directoriesScanned, pendingDirectories, inaccessible, elapsed, estimatedRemaining));
     }
 }
 

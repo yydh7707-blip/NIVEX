@@ -20,6 +20,14 @@ async function keyPair(): Promise<{ publicKey: string; privateKey: CryptoKey }> 
 }
 
 describe("NIVEX API", () => {
+  it("publishes the active consent version for the website client", async () => {
+    const api = await createHarness();
+    const response = await api.request("/api/v1/public/config");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ consentVersion: CONSENT_VERSION });
+  });
+
   it("requires an authenticated session and a server-side Gemini key for model listing", async () => {
     const api = await createHarness();
     const unauthenticated = await api.request("/api/v1/ai/models");

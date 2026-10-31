@@ -1,8 +1,15 @@
 import { getLang, type Lang } from "./lang.ts";
 
-// Must match CONSENT_VERSION in the API; the server rejects any other value.
-export const CONSENT_VERSION = "2026-10-29";
+export const CONSENT_VERSION = "2026-10-30";
+let activeConsentVersion = CONSENT_VERSION;
 const STORE = "nivex.consent";
+
+export function configureConsentVersion(version: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(version)) {
+    throw new Error("The API returned an invalid consent version.");
+  }
+  activeConsentVersion = version;
+}
 
 export interface ConsentBody {
   accepted: true;
@@ -11,7 +18,7 @@ export interface ConsentBody {
 
 export function hasConsent(): boolean {
   try {
-    return sessionStorage.getItem(STORE) === CONSENT_VERSION;
+    return sessionStorage.getItem(STORE) === activeConsentVersion;
   } catch {
     return false;
   }
@@ -19,7 +26,7 @@ export function hasConsent(): boolean {
 
 export function grantConsent(): void {
   try {
-    sessionStorage.setItem(STORE, CONSENT_VERSION);
+    sessionStorage.setItem(STORE, activeConsentVersion);
   } catch {
     // Without storage the consent screen is simply shown again.
   }
@@ -34,7 +41,7 @@ export function clearConsent(): void {
 }
 
 export function consentBody(): ConsentBody {
-  return { accepted: true, version: CONSENT_VERSION };
+  return { accepted: true, version: activeConsentVersion };
 }
 
 export function isTimeout(error: unknown): boolean {

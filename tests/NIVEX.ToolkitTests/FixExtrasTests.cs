@@ -15,6 +15,13 @@ public sealed class FixExtrasTests
         Assert.Empty(DeviceInspector.Parse("not json"));
     }
 
+    [Fact]
+    public async Task DeviceReadDoesNotTreatMalformedJsonAsAHealthyEmptyResult()
+    {
+        var result = await DeviceInspector.ReadAsync(new FakeRunner(output: "not json"), CancellationToken.None);
+        Assert.Null(result);
+    }
+
     [Theory]
     [InlineData("game.exe", true)]
     [InlineData("a b-1.exe", true)]

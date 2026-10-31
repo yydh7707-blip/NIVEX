@@ -1,6 +1,8 @@
 ﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Windows.Threading;
 using System.Windows.Media;
 using NIVEX.Toolkit;
 
@@ -22,6 +24,7 @@ public sealed class FixRow(string id) : Observable
     private string _message = "";
     private string? _advice;
     private string? _repairId;
+    private long? _metric;
 
     public string Id { get; } = id;
     public string Title => ToolText.Get("chk_" + Id);
@@ -52,7 +55,8 @@ public sealed class FixRow(string id) : Observable
         get
         {
             if (_advice is null) return "";
-            if (Id is "disk" or "temp" or "dns" or "internet" or "adapter" or "nivex") return ToolText.Get("adv_" + Id);
+            if (Id is "disk" or "temp" or "dns" or "internet" or "adapter" or "nivex" or "drive-space" or "startup" or "device-errors" or "recent-errors")
+                return ToolText.Get("adv_" + Id);
             if (Id is "sfc" or "dism")
             {
                 if (_status == CheckStatus.Unknown && _message.Contains("administrator rights", StringComparison.OrdinalIgnoreCase))
@@ -66,6 +70,7 @@ public sealed class FixRow(string id) : Observable
     }
 
     public bool HasAdvice => _advice is not null;
+    public CheckResult ToCheckResult() => new(Id, Status, Message, _advice, _repairId, _metric);
 
     public void Apply(CheckResult result)
     {
@@ -73,6 +78,7 @@ public sealed class FixRow(string id) : Observable
         _message = result.Message;
         _advice = result.Advice;
         _repairId = result.RepairId;
+        _metric = result.Metric;
         Notify(null);
     }
 
@@ -84,6 +90,11 @@ public sealed class FixVm : ToolVm
     private readonly FixService _fix;
     private readonly ToolkitModel _host;
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _timeoutCts;
+    private DispatcherTimer? _scanTimer;
+    private Stopwatch? _scanClock;
+    private bool _inventoryActive;
+    private FileInventoryProgress? _lastInventoryProgress;
     private bool _busy;
     private bool _active;
     private string _summary = "";
@@ -177,7 +188,23 @@ public sealed class FixVm : ToolVm
         Message = "";
         Summary = ToolText.Get("scanning");
         _cts = new CancellationTokenSource();
-        var token = _cts.Token;
+        _timeoutCts = full ? new CancellationTokenSource(TimeSpan.FromMinutes(6)) : null;
+        using var linked = _timeoutCts is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, _timeoutCts.Token);
+        var token = linked?.Token ?? _cts.Token;
+        _inventoryActive = false;
+        _lastInventoryProgress = null;
+        if (full)
+        {
+            _scanClock = Stopwatch.StartNew();
+            _scanTimer = new DispatcherTimer(DispatcherPriority.Background, System.Windows.Threading.Dispatcher.CurrentDispatcher)
+            {
+                Interval = TimeSpan.FromSeconds(1),
+            };
+            _scanTimer.Tick += OnScanTimerTick;
+            _scanTimer.Start();
+        }
         Rows.Clear();
         foreach (var id in full ? FixService.FullIds : FixService.QuickIds) Rows.Add(new FixRow(id));
         _active = true;
@@ -185,42 +212,35 @@ public sealed class FixVm : ToolVm
         {
             var progress = new Progress<CheckResult>(r =>
             {
-                if (_active) Rows.FirstOrDefault(x => x.Id == r.Id)?.Apply(r);
+                if (!_active) return;
+                Rows.FirstOrDefault(x => x.Id == r.Id)?.Apply(r);
+                _inventoryActive = r.Id == "file-inventory" && r.Status == CheckStatus.Checking;
+                if (!_inventoryActive) UpdateScanBudgetMessage();
             });
-            var results = await _fix.ScanAsync(full, progress, token);
+            var inventoryProgress = new Progress<FileInventoryProgress>(p =>
+            {
+                if (!_active) return;
+                _lastInventoryProgress = p;
+                var estimate = FormatEstimate(p.EstimatedRemaining);
+                var budget = FormatEstimate(TimeSpan.FromMinutes(6) - (_scanClock?.Elapsed ?? TimeSpan.Zero));
+                Message = ToolText.F("inventoryProgress", p.FilesScanned, estimate, budget);
+            });
+            var results = await _fix.ScanAsync(full, progress, token, inventoryProgress);
             _active = false;
             if (token.IsCancellationRequested)
             {
-                Message = ToolText.Get("scanCancelled");
-                Summary = "";
-                MascotState = FixFaceState.Idle;
+                FinishCancelledScan(full);
                 return;
             }
             foreach (var result in results) Rows.FirstOrDefault(x => x.Id == result.Id)?.Apply(result);
             MascotState = FixFaceState.Analyzing;
             await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
-            var healthy = results.Count(r => r.Status == CheckStatus.Healthy);
-            var problems = results.Count(r => r.Status == CheckStatus.Problem);
-            var unknown = results.Count(r => r.Status == CheckStatus.Unknown);
-            var failed = results.Count(r => r.Status == CheckStatus.Failed);
-            Summary = ToolText.F("scanSummary", healthy, problems, unknown, failed);
-            _last = results.ToList();
-            Compare = "";
-            RebuildFindings();
-            RebuildRecurringIssues(results);
-            MascotState = failed > 0 ? FixFaceState.Error : FixFaceState.Completed;
-            _lastScan = Fmt.Time(DateTimeOffset.Now);
-            Notify(nameof(LastScan));
-            _host.AddHistory(new HistoryRecord
-            {
-                Kind = HistoryKind.Fix,
-                Title = ToolText.Get(full ? "fullScan" : "quickScan"),
-                Success = problems == 0 && failed == 0,
-                Summary = Summary,
-                ErrorType = problems + failed == 0 ? null : string.Join(",", results.Where(r => r.Status is CheckStatus.Problem or CheckStatus.Failed).Select(r => r.Id)),
-                Detail = string.Join("\n", results.Select(r => $"{r.Id}: {r.Status} - {r.Message}")),
-                Advice = string.Join("\n", results.Where(r => r.Advice is not null).Select(r => r.Advice)),
-            });
+            CompleteScan(results, full);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            _active = false;
+            FinishCancelledScan(full);
         }
         catch (InvalidOperationException)
         {
@@ -236,11 +256,98 @@ public sealed class FixVm : ToolVm
         finally
         {
             _active = false;
+            StopScanTimer();
             if (MascotState is FixFaceState.Scanning or FixFaceState.Analyzing) MascotState = FixFaceState.Error;
             Busy = false;
+            linked?.Dispose();
             _cts.Dispose();
             _cts = null;
+            _timeoutCts?.Dispose();
+            _timeoutCts = null;
         }
+    }
+
+    private void CompleteScan(IReadOnlyList<CheckResult> results, bool full, bool timedOut = false)
+    {
+        var healthy = results.Count(r => r.Status == CheckStatus.Healthy);
+        var problems = results.Count(r => r.Status == CheckStatus.Problem);
+        var unknown = results.Count(r => r.Status == CheckStatus.Unknown);
+        var failed = results.Count(r => r.Status == CheckStatus.Failed);
+        Summary = ToolText.F("scanSummary", healthy, problems, unknown, failed);
+        _last = results.ToList();
+        Compare = "";
+        RebuildFindings();
+        RebuildRecurringIssues(results);
+        MascotState = timedOut || failed > 0 ? FixFaceState.Error : FixFaceState.Completed;
+        if (!timedOut) Message = "";
+        _lastScan = Fmt.Time(DateTimeOffset.Now);
+        Notify(nameof(LastScan));
+        if (timedOut) Message = ToolText.Get("scanTimeLimit");
+        _host.AddHistory(new HistoryRecord
+        {
+            Kind = HistoryKind.Fix,
+            Title = ToolText.Get(full ? "fullScan" : "quickScan"),
+            Success = !timedOut && problems == 0 && failed == 0,
+            Summary = Summary,
+            ErrorType = timedOut ? "scan_timeout" : problems + failed == 0 ? null :
+                string.Join(",", results.Where(r => r.Status is CheckStatus.Problem or CheckStatus.Failed).Select(r => r.Id)),
+            Detail = string.Join("\n", results.Select(r => $"{r.Id}: {r.Status} - {r.Message}")),
+            Advice = string.Join("\n", results.Where(r => r.Advice is not null).Select(r => r.Advice)),
+        });
+    }
+
+    private void FinishCancelledScan(bool full)
+    {
+        StopScanTimer();
+        if (_timeoutCts?.IsCancellationRequested == true)
+        {
+            var scanProgress = _lastInventoryProgress;
+            var timedOut = scanProgress is null
+                ? ToolText.Get("scanLimitIncomplete")
+                : ToolText.F("inventoryTimedOut", scanProgress.FilesScanned);
+            foreach (var row in Rows.Where(r => r.Status is CheckStatus.Pending or CheckStatus.Checking))
+                row.Apply(new CheckResult(row.Id, CheckStatus.Unknown,
+                    row.Id == "file-inventory" ? timedOut : ToolText.Get("scanLimitIncomplete")));
+            CompleteScan(Rows.Select(r => r.ToCheckResult()).ToList(), full, true);
+            if (scanProgress is not null) Message = ToolText.F("scanTimeLimitWithInventory", scanProgress.FilesScanned);
+            return;
+        }
+        foreach (var row in Rows.Where(r => r.Status is CheckStatus.Pending or CheckStatus.Checking))
+            row.Apply(new CheckResult(row.Id, CheckStatus.Unknown, ToolText.Get("scanCancelled")));
+        Message = ToolText.Get("scanCancelled");
+        Summary = "";
+        MascotState = FixFaceState.Idle;
+    }
+
+    private void OnScanTimerTick(object? sender, EventArgs args)
+    {
+        if (_inventoryActive) return;
+        UpdateScanBudgetMessage();
+    }
+
+    private void UpdateScanBudgetMessage()
+    {
+        if (_scanClock is null) return;
+        var remaining = TimeSpan.FromMinutes(6) - _scanClock.Elapsed;
+        Message = ToolText.F("scanBudget", FormatEstimate(remaining));
+    }
+
+    private static string FormatEstimate(TimeSpan duration)
+    {
+        var seconds = Math.Max(0, (int)Math.Ceiling(duration.TotalSeconds));
+        return seconds >= 60
+            ? ToolText.F("estimateMinutes", (int)Math.Ceiling(seconds / 60d))
+            : ToolText.F("estimateSeconds", seconds);
+    }
+
+    private void StopScanTimer()
+    {
+        if (_scanTimer is null) return;
+        _scanTimer.Stop();
+        _scanTimer.Tick -= OnScanTimerTick;
+        _scanTimer = null;
+        _scanClock = null;
+        _inventoryActive = false;
     }
 
     private async Task RepairAsync(object? parameter)

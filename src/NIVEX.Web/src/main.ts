@@ -9,12 +9,14 @@ import { operator } from "./operator.ts";
 import { renderPolicy, documentTitle } from "./policy.ts";
 import { footerCopy, type PolicyKey } from "./policyCopy.ts";
 import { mountIpLookup } from "./ipLookup.ts";
+import { configureConsentVersion } from "./consent.ts";
 
 interface PublicConfig {
   version: string;
   turnstileSiteKey: string;
   devVerification: boolean;
   downloadUrl: string;
+  consentVersion: string;
   offline?: boolean;
 }
 
@@ -47,7 +49,7 @@ function updateMusicButton(): void {
 }
 backgroundMusic.addEventListener("play", updateMusicButton);
 backgroundMusic.addEventListener("pause", updateMusicButton);
-let config: PublicConfig = { version: "0.3.5", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, offline: true };
+let config: PublicConfig = { version: "0.3.5", turnstileSiteKey: "", devVerification: false, downloadUrl: INSTALLER_PATH, consentVersion: "", offline: true };
 
 function t(): Copy {
   return copy;
@@ -65,6 +67,7 @@ async function loadConfig(): Promise<void> {
     const response = await fetch(api("/api/v1/public/config"));
     if (!response.ok) return;
     const loaded = await response.json() as PublicConfig;
+    configureConsentVersion(loaded.consentVersion);
     config = { ...loaded, downloadUrl: loaded.downloadUrl || INSTALLER_PATH, offline: false };
   } catch {
     config = { ...config, offline: true };

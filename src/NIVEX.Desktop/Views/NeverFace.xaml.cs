@@ -7,6 +7,9 @@ namespace NIVEX.Desktop.Views;
 
 public partial class NeverFace : UserControl
 {
+    private const int ActiveBlinkPeriodMilliseconds = 3000;
+    private const int BlinkDurationMilliseconds = 218;
+
     public static readonly DependencyProperty StateProperty = DependencyProperty.Register(
         nameof(State),
         typeof(FixFaceState),
@@ -100,8 +103,7 @@ public partial class NeverFace : UserControl
 
         var delay = State switch
         {
-            FixFaceState.Scanning => _random.Next(5200, 8200),
-            FixFaceState.Repairing => _random.Next(4600, 7600),
+            FixFaceState.Scanning or FixFaceState.Repairing => ActiveBlinkPeriodMilliseconds - BlinkDurationMilliseconds,
             _ => _random.Next(3000, 5900),
         };
         _blinkTimer.Interval = TimeSpan.FromMilliseconds(delay);
@@ -113,9 +115,6 @@ public partial class NeverFace : UserControl
         _blinkTimer.Stop();
         if (!_isLoaded) return;
         Blink();
-        var special = State is FixFaceState.Analyzing or FixFaceState.Error or FixFaceState.Completed;
-        if (special) _specialBlinkUsed = true;
-        ScheduleNextBlink(special);
     }
 
     private void Blink()
@@ -146,7 +145,7 @@ public partial class NeverFace : UserControl
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
         });
         animation.KeyFrames.Add(new EasingDoubleKeyFrame(0.06, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(102))));
-        animation.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(218)))
+        animation.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(BlinkDurationMilliseconds)))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
         });

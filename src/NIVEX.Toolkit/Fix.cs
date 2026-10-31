@@ -71,21 +71,31 @@ public sealed record FixOptions(
     Func<bool> IsAdministrator,
     Func<long?> SystemDriveFreeBytes,
     Func<long?> SystemDriveTotalBytes,
-    string DnsTestDomain = "www.microsoft.com");
+    string DnsTestDomain = "www.microsoft.com",
+    Func<CancellationToken, IProgress<FileInventoryProgress>?, FileInventoryScan>? ScanFileMetadata = null);
 
 public sealed class FixService(FixOptions options, ICommandRunner runner, NetworkLab network)
 {
     public static readonly string[] QuickIds = ["os", "disk", "temp", "nivex", "adapter", "dns", "internet"];
-    public static readonly string[] FullIds = [.. QuickIds, "gateway", "sfc", "dism"];
+    public static readonly string[] FullIds = [.. QuickIds, "gateway", "drive-space", "startup", "device-errors", "recent-errors", "sfc", "dism", "file-inventory"];
+    private readonly CrashLab _crash = new(runner);
     private static readonly TimeSpan TempAge = TimeSpan.FromHours(24);
     private int _scanning;
 
     public bool IsScanning => Volatile.Read(ref _scanning) == 1;
 
-    public Task<IReadOnlyList<CheckResult>> ScanAsync(bool full, IProgress<CheckResult>? progress, CancellationToken ct) =>
-        ScanIdsAsync(full ? FullIds : QuickIds, progress, ct);
+    public Task<IReadOnlyList<CheckResult>> ScanAsync(
+        bool full,
+        IProgress<CheckResult>? progress,
+        CancellationToken ct,
+        IProgress<FileInventoryProgress>? inventoryProgress = null) =>
+        ScanIdsAsync(full ? FullIds : QuickIds, progress, ct, inventoryProgress);
 
-    public async Task<IReadOnlyList<CheckResult>> ScanIdsAsync(IReadOnlyList<string> ids, IProgress<CheckResult>? progress, CancellationToken ct)
+    public async Task<IReadOnlyList<CheckResult>> ScanIdsAsync(
+        IReadOnlyList<string> ids,
+        IProgress<CheckResult>? progress,
+        CancellationToken ct,
+        IProgress<FileInventoryProgress>? inventoryProgress = null)
     {
         if (Interlocked.Exchange(ref _scanning, 1) == 1) throw new InvalidOperationException("scan already running");
         try
@@ -95,7 +105,7 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
             {
                 ct.ThrowIfCancellationRequested();
                 progress?.Report(new CheckResult(id, CheckStatus.Checking, ""));
-                var result = await CheckOneAsync(id, ct);
+                var result = await CheckOneAsync(id, ct, inventoryProgress);
                 results.Add(result);
                 progress?.Report(result);
             }
@@ -107,7 +117,7 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
     // Re-runs a single check, used to verify a repair against the real system state.
     public async Task<CheckResult> RecheckAsync(string id, CancellationToken ct) => await CheckOneAsync(id, ct);
 
-    private async Task<CheckResult> CheckOneAsync(string id, CancellationToken ct)
+    private async Task<CheckResult> CheckOneAsync(string id, CancellationToken ct, IProgress<FileInventoryProgress>? inventoryProgress = null)
     {
         try
         {
@@ -121,16 +131,39 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
                 "gateway" => await CheckGatewayAsync(ct),
                 "dns" => await CheckDnsAsync(ct),
                 "internet" => await CheckInternetAsync(ct),
+                "drive-space" => await Task.Run(CheckDriveSpace, ct),
+                "startup" => await Task.Run(CheckStartup, ct),
+                "device-errors" => await CheckDeviceErrorsAsync(ct),
+                "recent-errors" => await CheckRecentErrorsAsync(ct),
                 "sfc" => await CheckToolAsync("sfc", "sfc", ["/verifyonly"], Encoding.Unicode, ct),
                 "dism" => await CheckToolAsync("dism", "dism", ["/Online", "/Cleanup-Image", "/CheckHealth"], Encoding.Default, ct),
+                "file-inventory" => await CheckFileInventoryAsync(ct, inventoryProgress),
                 _ => new CheckResult(id, CheckStatus.Unknown, "not supported"),
             };
         }
+
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             return new CheckResult(id, CheckStatus.Failed, exception.GetType().Name);
         }
+    }
+
+    private async Task<CheckResult> CheckFileInventoryAsync(CancellationToken ct, IProgress<FileInventoryProgress>? progress)
+    {
+        var scan = await Task.Run(
+            () => options.ScanFileMetadata?.Invoke(ct, progress) ??
+                FileInventoryScanner.ScanLocalDrives(TimeSpan.FromMinutes(6), ct, progress),
+            ct);
+        var elapsed = scan.Elapsed.ToString(@"m\:ss");
+        var message = $"File metadata checked for {scan.FilesScanned} files across {scan.DirectoriesScanned} folders in {elapsed}. Contents were not opened; {scan.Inaccessible} locations could not be read.";
+        if (scan.DirectoriesScanned == 0)
+            return new CheckResult("file-inventory", CheckStatus.Unknown, "No accessible, ready local drives were found for metadata scanning.");
+        if (!scan.Completed)
+            return new CheckResult("file-inventory", CheckStatus.Unknown, $"{message} The scan reached its time limit; the inventory is incomplete.");
+        return scan.Inaccessible == 0
+            ? new CheckResult("file-inventory", CheckStatus.Healthy, message)
+            : new CheckResult("file-inventory", CheckStatus.Unknown, message);
     }
 
     private CheckResult CheckOs() =>
@@ -146,6 +179,87 @@ public sealed class FixService(FixOptions options, ICommandRunner runner, Networ
         return percent < 10 || free.Value < 10L * 1073741824
             ? new CheckResult("disk", CheckStatus.Problem, text, "Free up space: review the temporary-file cleanup plan or remove files you no longer need.", "clean-temp", free.Value)
             : new CheckResult("disk", CheckStatus.Healthy, text, Metric: free.Value);
+    }
+
+    private CheckResult CheckDriveSpace()
+    {
+        var scanned = 0;
+        var inaccessible = 0;
+        var low = new List<string>();
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            if (drive.DriveType is not (DriveType.Fixed or DriveType.Removable)) continue;
+            try
+            {
+                if (!drive.IsReady)
+                {
+                    inaccessible++;
+                    continue;
+                }
+                var total = drive.TotalSize;
+                var free = drive.AvailableFreeSpace;
+                if (total <= 0) { inaccessible++; continue; }
+                scanned++;
+                var percent = free * 100.0 / total;
+                if (percent < 10 || free < 10L * 1073741824)
+                    low.Add($"{drive.Name} {percent:0}% free");
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                inaccessible++;
+            }
+        }
+
+        if (scanned == 0) return new CheckResult("drive-space", CheckStatus.Unknown, "No ready local drives could be checked.");
+        if (low.Count > 0)
+            return new CheckResult("drive-space", CheckStatus.Problem,
+                $"{string.Join(", ", low)}; {inaccessible} drive(s) unavailable.",
+                "Review the affected drive and remove only files you recognize and no longer need.");
+        return inaccessible == 0
+            ? new CheckResult("drive-space", CheckStatus.Healthy, $"{scanned} local drive(s) checked; no low-space threshold was reached.")
+            : new CheckResult("drive-space", CheckStatus.Unknown, $"{scanned} local drive(s) checked; {inaccessible} drive(s) were unavailable.");
+    }
+
+    private CheckResult CheckStartup()
+    {
+        if (!OperatingSystem.IsWindows())
+            return new CheckResult("startup", CheckStatus.Unknown, "Startup registry checks are available on Windows only.");
+        var scan = StartupInspector.Scan();
+        var missing = scan.Entries.Count(entry => !entry.PathExists);
+        if (missing > 0)
+            return new CheckResult("startup", CheckStatus.Problem,
+                $"{missing} Run-key startup entry target(s) could not be found; {scan.InaccessibleLocations} registry location(s) unavailable.",
+                "Review these entries in Windows Settings or Task Manager before changing them.");
+        return scan.InaccessibleLocations == 0
+            ? new CheckResult("startup", CheckStatus.Healthy, $"{scan.Entries.Count} Run-key startup entry(ies) checked.")
+            : new CheckResult("startup", CheckStatus.Unknown,
+                $"{scan.Entries.Count} Run-key startup entry(ies) checked; {scan.InaccessibleLocations} registry location(s) unavailable.");
+    }
+
+    private async Task<CheckResult> CheckDeviceErrorsAsync(CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindows())
+            return new CheckResult("device-errors", CheckStatus.Unknown, "Device Manager checks are available on Windows only.");
+        var problems = await DeviceInspector.ReadAsync(runner, ct);
+        if (problems is null)
+            return new CheckResult("device-errors", CheckStatus.Unknown, "Device Manager error status could not be read.");
+        return problems.Count == 0
+            ? new CheckResult("device-errors", CheckStatus.Healthy, "No non-zero Device Manager error codes were reported.")
+            : new CheckResult("device-errors", CheckStatus.Problem,
+                $"{problems.Count} device(s) report a Device Manager error code.",
+                "Review the device and its driver in Device Manager; NIVEX does not install or remove drivers.");
+    }
+
+    private async Task<CheckResult> CheckRecentErrorsAsync(CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindows())
+            return new CheckResult("recent-errors", CheckStatus.Unknown, "Windows event log checks are available on Windows only.");
+        var errors = await _crash.ReadAsync(15, ct);
+        return errors.Count == 0
+            ? new CheckResult("recent-errors", CheckStatus.Healthy, "No matching errors were found in the 15 newest queried Application and System log records.")
+            : new CheckResult("recent-errors", CheckStatus.Problem,
+                $"{errors.Count} matching error record(s) found in the newest queried Application and System log records.",
+                "Review the event details and timestamps before deciding whether action is needed.");
     }
 
     private CheckResult CheckTemp(CancellationToken ct)

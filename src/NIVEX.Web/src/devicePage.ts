@@ -11,6 +11,7 @@ export interface PublicConfig {
   turnstileSiteKey: string;
   devVerification: boolean;
   downloadUrl: string;
+  consentVersion: string;
   offline?: boolean;
 }
 

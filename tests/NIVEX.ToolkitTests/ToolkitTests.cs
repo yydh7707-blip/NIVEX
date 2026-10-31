@@ -131,7 +131,8 @@ public sealed class FixTests
         var lab = new NetworkLab(new FakePinger(_ => new PingSample(true, 3, "Success")),
             new FakeResolver(_ => dnsOk ? [IPAddress.Loopback] : throw new SocketException((int)SocketError.HostNotFound)), () => []);
         var options = new FixOptions(System.IO.Path.Combine(dir.Path, "tmp"), System.IO.Path.Combine(dir.Path, "settings.json"),
-            System.IO.Path.Combine(dir.Path, "logs", "n.log"), [], "1.0.0", admin ?? (() => false), () => free, () => 200L << 30);
+            System.IO.Path.Combine(dir.Path, "logs", "n.log"), [], "1.0.0", admin ?? (() => false), () => free, () => 200L << 30,
+            ScanFileMetadata: static (_, _) => new FileInventoryScan(0, 0, 0, true, TimeSpan.Zero));
         Directory.CreateDirectory(options.TempRoot);
         return new FixService(options, runner ?? new FakeRunner(), lab);
     }
@@ -150,9 +151,11 @@ public sealed class FixTests
         using var dir = new TempDir();
         var runner = new FakeRunner();
         var results = await Service(dir, runner).ScanAsync(true, null, CancellationToken.None);
+        Assert.Equal(FixService.FullIds, results.Select(r => r.Id));
         Assert.Equal(CheckStatus.Unknown, results.Single(r => r.Id == "sfc").Status);
         Assert.Equal(CheckStatus.Unknown, results.Single(r => r.Id == "dism").Status);
-        Assert.Empty(runner.Calls);
+        Assert.Contains(runner.Calls, call => call.StartsWith("powershell ", StringComparison.Ordinal));
+        Assert.Contains(runner.Calls, call => call.StartsWith("wevtutil qe Application ", StringComparison.Ordinal));
     }
 
     [Fact]
